@@ -22,6 +22,46 @@ const App = () => {
   const isDemoMode = new URLSearchParams(window.location.search).get('demo') === 'true';
 
   // ==========================================
+  // [웹 교재 (HTML) 퀴즈 스크립트 전역 주입]
+  // ==========================================
+  // 리액트가 무시한 HTML 안의 handleChoice 함수를 전역으로 살려냅니다.
+  useEffect(() => {
+    window.handleChoice = (element, isCorrect, feedbackId) => {
+      const parentContainer = element.closest('.flex-col');
+      if (!parentContainer) return;
+      const options = parentContainer.querySelectorAll('.quiz-option');
+      const feedbackArea = document.getElementById(feedbackId);
+      const resultText = document.getElementById('feedback-result');
+
+      options.forEach(opt => {
+        opt.style.borderColor = "#fff";
+        opt.style.backgroundColor = "#fff";
+        opt.style.color = "#334155";
+      });
+
+      if (isCorrect) {
+        element.style.borderColor = "#22c55e";
+        element.style.backgroundColor = "#f0fdf4";
+        element.style.color = "#15803d";
+        if (resultText) {
+          resultText.innerText = "✅ Correct!";
+          resultText.style.color = "#22c55e";
+        }
+      } else {
+        element.style.borderColor = "#ef4444";
+        element.style.backgroundColor = "#fef2f2";
+        element.style.color = "#b91c1c";
+        if (resultText) {
+          resultText.innerText = "❌ Try Again!";
+          resultText.style.color = "#ef4444";
+        }
+      }
+
+      if (feedbackArea) feedbackArea.classList.remove('hidden');
+    };
+  }, []);
+
+  // ==========================================
   // [단어장 상태 및 로직] 
   // ==========================================
   const [showGuideMain, setShowGuideMain] = useState(true);
@@ -351,6 +391,7 @@ const App = () => {
 
         <div className="flex-1 overflow-y-auto custom-scrollbar relative">
           {appMode === 'class' ? (
+            /* ===== 강의실 본문 ===== */
             selectedLesson ? (
               <div className="max-w-4xl mx-auto p-6 md:p-8 space-y-8 animate-in fade-in zoom-in-95 duration-300">
                 <header className="space-y-2">
@@ -431,16 +472,15 @@ const App = () => {
                         )
                       )
                     ) : (
-                      /* 오디오 섀도잉 리스트 */
+                      /* ★ 1. 완벽한 오디오 재생 로직 (JSON에 적힌 이름 그대로!) ★ */
                       <div className="p-4 md:p-8 space-y-3">
                         {selectedLesson.script && selectedLesson.script.length > 0 ? (
                           selectedLesson.script.map((line, idx) => (
                             <div key={idx} className="flex items-center gap-4 p-4 md:p-6 bg-white hover:bg-blue-50/50 border border-slate-100 hover:border-blue-200 rounded-2xl transition-all shadow-sm group">
                               <button 
                                 onClick={() => {
-                                  // 오디오 URL 생성 규칙 (필요시 접두사 D_ 등을 수정)
-                                  const formattedNum = String(idx + 1).padStart(2, '0');
-                                  const audioUrl = `${CLASS_AUDIO_BASE_URL}/D_${selectedLesson.lesson_id}_${formattedNum}.mp3`;
+                                  // JSON의 line.audio 값 (예: D_3599_05.mp3, K_3305_study_01.mp3) 그대로 가져와서 붙입니다!
+                                  const audioUrl = `${CLASS_AUDIO_BASE_URL}/${line.audio}`;
                                   playAudio(audioUrl, 'class', `${selectedLesson.lesson_id}_${idx}`);
                                 }}
                                 className="w-12 h-12 shrink-0 rounded-full bg-slate-50 border border-slate-200 text-slate-400 flex items-center justify-center group-hover:bg-[#3713ec] group-hover:text-white group-hover:border-[#3713ec] transition-all shadow-sm"
