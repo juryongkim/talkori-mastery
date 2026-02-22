@@ -7,11 +7,6 @@ import {
   CheckCircle2, Check, MonitorPlay, BookA, ChevronDown, FileText, Mic
 } from 'lucide-react';
 
-// ★ 정석 PDF 엔진 불러오기
-import { pdfjs, Document, Page } from 'react-pdf';
-import 'react-pdf/dist/Page/AnnotationLayer.css';
-import 'react-pdf/dist/Page/TextLayer.css';
-pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
 import classData from './class_data.json';
 import vocaData from './voca_data.json';
@@ -24,12 +19,6 @@ const CLASS_AUDIO_BASE_URL = `${BUNNY_CDN_HOST}/audio_class`;
 // ★ 버니넷 PDF 폴더 주소 설정
 const PDF_CDN_BASE_URL = `${BUNNY_CDN_HOST}/pdf-re`; 
 const STORAGE_KEY = 'talkori_progress_v1';
-// ★ Issue 3 해결: 무한 렌더링(마우스 오버 크래시) 방지용 안전 옵션
-const pdfOptions = {
-  cMapUrl: `https://unpkg.com/pdfjs-dist@${pdfjs.version}/cmaps/`,
-  cMapPacked: true,
-  standardFontDataUrl: `https://unpkg.com/pdfjs-dist@${pdfjs.version}/standard_fonts/`,
-};
 
 const App = () => {
   const [appMode, setAppMode] = useState('class'); 
@@ -392,60 +381,7 @@ const isMobile = windowWidth <= 768;
                     {contentTab === 'pdf' ? (
                       selectedLesson.course === 'MAIN233' ? (
                         selectedLesson.pdf_url ? (
-/* ★ 3. Issue 3 해결: 웹툰형 지연 로딩 + 주소 확인 진단기 + 캔버스 확보 ★ */
-                          <div 
-                            className="bg-[#333333] flex flex-col items-center custom-scrollbar h-[600px] md:h-[800px] overflow-y-auto rounded-b-[2rem] w-full relative"
-                            onScroll={(e) => {
-                              const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
-                              if (scrollTop + clientHeight >= scrollHeight - 1000) {
-                                if (numPages && visiblePages < numPages) {
-                                  setVisiblePages(prev => prev + 2); 
-                                }
-                              }
-                            }}
-                          >
-                            <Document 
-                              file={getConvertedPdfUrl(selectedLesson.pdf_url)} 
-                              options={pdfOptions} /* 바깥으로 빼둔 안전한 옵션 연결 */
-                              onLoadSuccess={({ numPages }) => {
-                                setNumPages(numPages);
-                                setVisiblePages(3);
-                              }}
-                              loading={
-                                <div className="text-white py-20 font-bold flex flex-col items-center gap-4 text-center">
-                                  <div className="animate-pulse text-sm">교재를 안전하게 불러오는 중입니다...</div>
-                                  <div className="text-[10px] text-white/50 bg-black/50 p-3 rounded-xl break-all w-5/6">
-                                    [접속 시도 중인 버니넷 주소]<br/>{getConvertedPdfUrl(selectedLesson.pdf_url)}
-                                  </div>
-                                </div>
-                              }
-                              error={
-                                <div className="text-red-400 py-20 font-bold flex flex-col items-center gap-4 text-center">
-                                  <MonitorPlay size={32}/>
-                                  <p>PDF를 불러올 수 없습니다.</p>
-                                  <div className="text-[10px] text-white/80 bg-black/50 p-4 rounded-xl break-all w-5/6 select-all">
-                                    [에러가 난 실제 주소 (클릭해보세요)]<br/>
-                                    <a href={getConvertedPdfUrl(selectedLesson.pdf_url)} target="_blank" rel="noreferrer" className="text-blue-400 underline mt-2 inline-block">
-                                      {getConvertedPdfUrl(selectedLesson.pdf_url)}
-                                    </a>
-                                  </div>
-                                </div>
-                              }
-                            >
-                              {Array.from(new Array(Math.min(numPages || 0, visiblePages)), (el, index) => (
-                                /* bg-white와 min-h를 줘서 이미지 캔버스가 그려질 도화지를 강제로 확보합니다 */
-                                <div key={`page_wrapper_${index}`} className="mb-1 md:mb-4 shadow-2xl bg-white min-h-[500px] w-full flex justify-center">
-                                  <Page 
-                                    pageNumber={index + 1} 
-                                    renderTextLayer={false} 
-                                    renderAnnotationLayer={false} 
-                                    width={isMobile ? windowWidth : 700} 
-                                    loading={<div className="w-full h-[500px] bg-slate-100 animate-pulse flex items-center justify-center text-slate-400 text-xs">페이지 이미지 렌더링 중...</div>}
-                                  />
-                                </div>
-                              ))}
-                            </Document>
-                          </div>
+
                         ) : (<div className="flex flex-col items-center justify-center h-[400px] text-slate-400"><FileText size={48} className="mb-4 opacity-30"/><p className="font-bold text-sm">이 강의는 PDF 교재가 없습니다.</p></div>)
                       ) : (
                         selectedLesson.web_content ? (
