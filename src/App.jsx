@@ -163,12 +163,12 @@ const App = () => {
     return `${PDF_CDN_BASE_URL}/${fileName}`; // 버니넷 주소로 조립
   };
 
-// ★ 1. 완벽 해결: 퀴즈 전역 함수 유지 + 토글 스위치 강제 감지 ★
+// ★ 1. 완벽 해결: 퀴즈 전역 함수 유지 + 토글 예외사항(1, 5강) 스마트 감지 ★
   useEffect(() => {
     if (appMode !== 'class' || contentTab !== 'pdf' || !webContentRef.current) return;
     const container = webContentRef.current;
 
-    // [1] 퀴즈용 전역 함수 (현재 완벽하게 작동 중이므로 유지)
+    // [1] 퀴즈용 전역 함수 (완벽 작동 유지)
     window.handleChoice = (element, isCorrect, feedbackId) => {
       const parentContainer = element.closest('.flex-col') || element.parentElement;
       const options = parentContainer.querySelectorAll('.quiz-option');
@@ -203,35 +203,35 @@ const App = () => {
       document.getElementById('quiz-feedback')?.classList.remove('hidden');
     };
 
-    // [2] 토글 스위치용 이벤트 위임 (React의 onchange 무시 현상 완벽 방어)
+    // [2] 토글 스위치 스마트 감지기 (1강, 5강의 옛날 규칙까지 완벽 호환)
     const handleToggleClick = (e) => {
       const switchLabel = e.target.closest('.tk-switch');
       if (switchLabel) {
-        // 체크박스 애니메이션이 끝날 수 있도록 10ms 딜레이를 줍니다.
         setTimeout(() => {
           const sw = switchLabel.querySelector('input[type="checkbox"]');
           if (!sw) return;
 
-          // id="switch-1" 등에서 숫자만 추출
           const idMatch = sw.id.match(/\d+/);
           if (!idMatch) return;
           const id = idMatch[0];
 
           const korText = document.getElementById('kor-' + id);
-          const engText = document.getElementById('eng-' + id);
+          // 5강의 예외 ID인 'nuance-1'도 스스로 찾게 만듭니다.
+          const engText = document.getElementById('eng-' + id) || document.getElementById('nuance-' + id);
 
           if (korText) {
-            // 구버전(data-base)과 신버전(data-opt1) 모두 알아서 호환
-            const textOn = korText.getAttribute('data-opt2') || korText.getAttribute('data-transformed');
-            const textOff = korText.getAttribute('data-opt1') || korText.getAttribute('data-base');
+            // 표준(opt2), 옛날버전(transformed), 1강(casual), 5강(confirm) 모두 감지!
+            const textOn = korText.getAttribute('data-opt2') || korText.getAttribute('data-transformed') || korText.getAttribute('data-casual') || korText.getAttribute('data-confirm');
+            const textOff = korText.getAttribute('data-opt1') || korText.getAttribute('data-base') || korText.getAttribute('data-polite') || korText.getAttribute('data-simple');
             if (textOn && textOff) {
               korText.innerText = sw.checked ? textOn : textOff;
               korText.style.color = sw.checked ? '#526ae5' : '#1e293b';
             }
           }
           if (engText) {
-            const engOn = engText.getAttribute('data-eng2');
-            const engOff = engText.getAttribute('data-eng1');
+            // 표준(eng2)과 5강(n2) 모두 감지!
+            const engOn = engText.getAttribute('data-eng2') || engText.getAttribute('data-n2');
+            const engOff = engText.getAttribute('data-eng1') || engText.getAttribute('data-n1');
             if (engOn && engOff) {
               engText.innerText = sw.checked ? engOn : engOff;
             }
@@ -240,7 +240,6 @@ const App = () => {
       }
     };
 
-    // 컨테이너 전체에 클릭 감지기를 붙입니다.
     container.addEventListener('click', handleToggleClick);
 
     return () => {
