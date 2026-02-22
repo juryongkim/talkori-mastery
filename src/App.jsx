@@ -163,7 +163,7 @@ const App = () => {
     return `${PDF_CDN_BASE_URL}/${fileName}`; // 버니넷 주소로 조립
   };
 
-// ★ 2. Issue 1 해결: 강력한 이벤트 위임 및 상태 추적 로직 ★
+// ★ 1. Issue 1 해결: 모든 레슨(A/B타입) 호환형 만능 이벤트 위임 로직 ★
   useEffect(() => {
     if (appMode !== 'class' || contentTab !== 'pdf' || !webContentRef.current) return;
     const container = webContentRef.current;
@@ -175,33 +175,56 @@ const App = () => {
         flipCard.classList.toggle('flipped');
       }
 
-      // B. 퀴즈 옵션 버튼 감지
+      // B. 퀴즈 옵션 버튼 감지 (Type A, B 모두 지원)
       const quizOption = e.target.closest('.quiz-option');
       if (quizOption) {
-        const idMatch = quizOption.id.match(/opt-(\d+)/);
-        if (!idMatch) return;
-        const num = idMatch[1];
-
         const onclickAttr = quizOption.getAttribute('onclick') || '';
         const isCorrect = onclickAttr.includes('true'); 
 
-        container.querySelectorAll('.quiz-option').forEach(el => {
-          el.classList.remove('active-correct', 'active-wrong');
-          const markSpan = el.querySelector('span:last-child');
-          if (markSpan) markSpan.style.opacity = "0";
-        });
+        // 1. 같은 그룹 내의 모든 옵션 초기화
+        const parent = quizOption.parentElement;
+        if (parent) {
+          parent.querySelectorAll('.quiz-option').forEach(el => {
+            el.classList.remove('active-correct', 'active-wrong');
+            el.style.borderColor = ""; el.style.backgroundColor = ""; el.style.color = "";
+            const markSpan = el.querySelector('span:last-child');
+            if (markSpan && markSpan.id && markSpan.id.includes('mark')) markSpan.style.opacity = "0";
+          });
+        }
 
-        const mark = container.querySelector('#mark-' + num);
-        if (isCorrect) quizOption.classList.add('active-correct');
-        else quizOption.classList.add('active-wrong');
-        
-        if (mark) mark.style.opacity = "1";
+        // 2. 선택된 옵션에 강제 색상 적용 (CSS 누락 대비)
+        if (isCorrect) {
+          quizOption.classList.add('active-correct');
+          quizOption.style.borderColor = "#22c55e"; quizOption.style.backgroundColor = "#f0fdf4"; quizOption.style.color = "#15803d";
+        } else {
+          quizOption.classList.add('active-wrong');
+          quizOption.style.borderColor = "#ef4444"; quizOption.style.backgroundColor = "#fef2f2"; quizOption.style.color = "#b91c1c";
+        }
 
-        const feedbackArea = container.querySelector('#quiz-feedback');
-        if (feedbackArea) feedbackArea.classList.remove('hidden');
+        // Type A 방식 (O/X 마크 표시)
+        const idMatch = quizOption.id?.match(/opt-(\d+)/);
+        if (idMatch) {
+          const mark = container.querySelector('#mark-' + idMatch[1]);
+          if (mark) mark.style.opacity = "1";
+        }
+
+        // 3. 피드백 창 노출 (Type B의 feedback-xxx 추출 지원)
+        let feedbackId = 'quiz-feedback'; 
+        const feedbackMatch = onclickAttr.match(/'([^']+)'/);
+        if (feedbackMatch) feedbackId = feedbackMatch[1]; 
+
+        const feedbackArea = container.querySelector('#' + feedbackId) || container.querySelector('#quiz-feedback');
+        if (feedbackArea) {
+          feedbackArea.classList.remove('hidden');
+          const resultText = feedbackArea.querySelector('#feedback-result');
+          if (resultText) {
+            resultText.innerText = isCorrect ? "✅ Correct!" : "❌ Try Again!";
+            resultText.style.color = isCorrect ? "#22c55e" : "#ef4444";
+          }
+        }
       }
 
-      // C. 토글 스위치 감지 (클릭 직후 상태값을 즉시 읽어오기)
+      // C. 토글 스위치 감지 (Type A, B 모두 지원)
       const switchLabel = e.target.closest('.tk-switch');
       if (switchLabel) {
         setTimeout(() => {
@@ -211,9 +234,20 @@ const App = () => {
           if (idMatch) {
             const id = idMatch[1];
             const korText = container.querySelector('#kor-' + id);
+            const engText = container.querySelector('#eng-' + id);
+
             if (korText) {
-              korText.innerText = sw.checked ? korText.getAttribute('data-transformed') : korText.getAttribute('data-base');
-              korText.style.color = sw.checked ? '#526ae5' : '#1e293b';
+              const opt1 = korText.getAttribute('data-base') || korText.getAttribute('data-opt1');
+              const opt2 = korText.getAttribute('data-transformed') || korText.getAttribute('data-opt2');
+              if (opt1 && opt2) {
+                korText.innerText = sw.checked ? opt2 : opt1;
+                korText.style.color = sw.checked ? '#526ae5' : '#1e293b';
+              }
+            }
+            if (engText) {
+              const eng1 = engText.getAttribute('data-eng1');
+              const eng2 = engText.getAttribute('data-eng2');
+              if (eng1 && eng2) engText.innerText = sw.checked ? eng2 : eng1;
             }
           }
         }, 10);
@@ -453,7 +487,7 @@ const App = () => {
         </div>
       </div>
       
-{/* ★ 2. Issue 2 & 스타일 증발 해결: 폰트 주입 및 커스텀 색상 강제 지정 ★ */}
+{/* ★ 2. Issue 2 & 스타일/플립 증발 해결 ★ */}
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Lexend:wght@400;600;900&family=Noto+Sans+KR:wght@400;700;900&display=swap');
         @import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght@100..700&display=swap');
@@ -463,7 +497,7 @@ const App = () => {
         .custom-scrollbar::-webkit-scrollbar { width: 6px; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
         
-        /* 아이콘 텍스트 깨짐 철벽 방어 */
+        /* 아이콘 텍스트 깨짐 방어 */
         .material-symbols-outlined { 
           text-transform: none !important; 
           font-family: 'Material Symbols Outlined' !important;
@@ -473,7 +507,7 @@ const App = () => {
           letter-spacing: normal !important;
         } 
 
-        /* 리액트가 삭제해버린 워드프레스 컬러 강제 복구 */
+        /* 삭제된 컬러 강제 복구 */
         .text-bori-primary { color: #f59e0b !important; }
         .bg-bori-primary { background-color: #f59e0b !important; }
         .border-bori-primary { border-color: #f59e0b !important; }
@@ -487,7 +521,10 @@ const App = () => {
         .bg-tk-primary\\/5 { background-color: rgba(82, 106, 229, 0.05) !important; }
         .rounded-tk { border-radius: 1.5rem !important; }
         
-        /* 카드 플립 애니메이션 강제 적용 */
+        /* 카드 플립 애니메이션 핵심 엔진 복구 */
+        .flip-card { perspective: 1000px !important; }
+        .flip-card-inner { transition: transform 0.6s !important; transform-style: preserve-3d !important; position: relative !important; width: 100% !important; height: 100% !important; }
+        .flip-card-front, .flip-card-back { backface-visibility: hidden !important; -webkit-backface-visibility: hidden !important; position: absolute !important; top: 0 !important; left: 0 !important; width: 100% !important; height: 100% !important; }
         .flip-card.flipped .flip-card-inner { transform: rotateY(180deg) !important; }
         .flip-card-back { transform: rotateY(180deg) !important; }
       `}</style>
