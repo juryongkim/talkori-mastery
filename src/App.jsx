@@ -632,7 +632,7 @@ const App = () => {
                       <div className="flex gap-2 overflow-x-auto px-5 md:px-0 pb-3 md:pb-3 custom-scrollbar">
                         {availableTabs.map(key => (
                           <button key={key} onClick={() => setVideoTab(key)} className={`px-6 py-2 rounded-full shrink-0 text-[10px] font-black uppercase transition-all ${videoTab === key ? 'bg-[#3713ec] text-white shadow-lg' : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-100'}`}>
-                            {courseTabs[key]} VIDEO
+                            {courseTabs[key]}
                           </button>
                         ))}
                       </div>
