@@ -29,15 +29,16 @@ const App = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
   const isMobile = windowWidth <= 768;
-  // ★ 버니넷 다이렉트 주소 변환기 추가
+
+  // 웹 교재(HTML) 영역 참조
+  const webContentRef = useRef(null);
+
+  // ★ 버니넷 다이렉트 주소 변환기
   const getBunnyPdfUrl = (url) => {
     if (!url) return "";
     const fileName = url.split('/').pop(); 
     return `${PDF_CDN_BASE_URL}/${encodeURIComponent(fileName)}`; 
   };
-
-  // 웹 교재(HTML) 영역 참조
-  const webContentRef = useRef(null);
 
   // ==========================================
   // [단어장 상태 및 로직] 
@@ -159,7 +160,6 @@ const App = () => {
     if (appMode !== 'class' || contentTab !== 'pdf' || !webContentRef.current) return;
     const container = webContentRef.current;
 
-    // [1] 퀴즈용 전역 함수 (완벽 작동 유지)
     window.handleChoice = (element, isCorrect, feedbackId) => {
       const parentContainer = element.closest('.flex-col') || element.parentElement;
       const options = parentContainer.querySelectorAll('.quiz-option');
@@ -194,7 +194,6 @@ const App = () => {
       document.getElementById('quiz-feedback')?.classList.remove('hidden');
     };
 
-    // [2] 토글 스위치 스마트 감지기 (1강, 5강의 옛날 규칙까지 완벽 호환)
     const handleToggleClick = (e) => {
       const switchLabel = e.target.closest('.tk-switch');
       if (switchLabel) {
@@ -238,30 +237,36 @@ const App = () => {
   }, [selectedLesson, contentTab, appMode]);
 
   const renderMedia = (url) => {
-    if (!url) return <div className="text-white/50 font-bold flex flex-col items-center gap-2"><MonitorPlay size={40} className="opacity-50"/>영상/음원이 아직 준비되지 않았습니다.</div>;
+    if (!url) return <div className="text-white/50 font-bold flex flex-col items-center gap-2 h-full justify-center"><MonitorPlay size={40} className="opacity-50"/>영상/음원이 아직 준비되지 않았습니다.</div>;
     if (url.includes('youtu.be') || url.includes('youtube.com')) {
       let vid = "";
       if (url.includes('youtu.be/')) vid = url.split('youtu.be/')[1]?.split('?')[0];
       else if (url.includes('v=')) vid = url.split('v=')[1]?.split('&')[0];
       else if (url.includes('embed/')) vid = url.split('embed/')[1]?.split('?')[0];
-      return <iframe className="w-full h-full rounded-[2rem]" src={`https://www.youtube.com/embed/${vid}?rel=0`} allowFullScreen></iframe>;
+      return <iframe className="w-full h-full md:rounded-[2rem]" src={`https://www.youtube.com/embed/${vid}?rel=0`} allowFullScreen></iframe>;
     }
     if (url.match(/\.(m4a|mp3|wav)$/i)) {
       return (
-        <div className="flex flex-col items-center justify-center w-full h-full">
+        <div className="flex flex-col items-center justify-center w-full h-full bg-slate-900 md:rounded-[2rem]">
           <Volume2 size={48} className="text-white/30 mb-6" />
           <audio controls src={url} className="w-3/4 outline-none"></audio>
         </div>
       );
     }
-    return <video controls src={url} className="w-full h-full object-contain outline-none rounded-[2rem]"></video>;
+    return <video controls src={url} className="w-full h-full object-contain outline-none md:rounded-[2rem] bg-black"></video>;
   };
 
+  // ★ 현재 강의 기준 이전/다음 강의 찾기 로직
+  const currentCourseLessons = groupedClassData[selectedCourse]?.sections.flatMap(s => s.lessons) || [];
+  const currentLessonIdx = currentCourseLessons.findIndex(l => l.lesson_id === selectedLesson?.lesson_id);
+  const prevLesson = currentLessonIdx > 0 ? currentCourseLessons[currentLessonIdx - 1] : null;
+  const nextLesson = currentLessonIdx !== -1 && currentLessonIdx < currentCourseLessons.length - 1 ? currentCourseLessons[currentLessonIdx + 1] : null;
+
   return (
-    <div className="flex h-screen bg-[#f6f6f8] font-sans text-slate-800 overflow-hidden relative">
+    <div className="flex h-screen bg-white md:bg-[#f6f6f8] font-sans text-slate-800 overflow-hidden relative">
       
       {/* 1. 사이드바 */}
-      <div className={`w-80 bg-white border-r border-slate-200 shadow-xl flex flex-col h-full shrink-0 z-20 ${isSidebarOpen ? 'fixed inset-y-0 left-0 translate-x-0' : 'hidden md:flex'}`}>
+      <div className={`w-80 bg-white border-r border-slate-200 shadow-xl flex flex-col h-full shrink-0 z-50 ${isSidebarOpen ? 'fixed inset-y-0 left-0 translate-x-0' : 'hidden md:flex'}`}>
         <div className="p-6 border-b border-slate-50 shrink-0 bg-[#3713ec] text-white flex justify-between items-center">
           <div className="flex items-center gap-3"><GraduationCap size={28} /><div><h1 className="font-black text-2xl tracking-tight">Talkori</h1><p className="text-[10px] font-bold uppercase tracking-widest text-blue-200">Mastery Platform</p></div></div>
           <button onClick={() => setIsSidebarOpen(false)} className="md:hidden p-2 text-white/70 hover:text-white"><X size={20}/></button>
@@ -288,7 +293,7 @@ const App = () => {
                     {openSection === section.title && (
                       <div className="p-2 space-y-1 bg-white border-t border-slate-100">
                         {section.lessons.length > 0 ? section.lessons.map((lesson, lIdx) => (
-                          <div key={lesson.lesson_id} onClick={() => { setSelectedLesson(lesson); setIsSidebarOpen(false); }} className={`p-3 text-xs font-bold rounded-lg cursor-pointer transition-all ${selectedLesson?.lesson_id === lesson.lesson_id ? 'bg-blue-50 text-[#3713ec]' : 'text-slate-600 hover:bg-slate-50'}`}>
+                          <div key={lesson.lesson_id} onClick={() => { setSelectedLesson(lesson); setIsSidebarOpen(false); window.scrollTo(0,0); }} className={`p-3 text-xs font-bold rounded-lg cursor-pointer transition-all ${selectedLesson?.lesson_id === lesson.lesson_id ? 'bg-blue-50 text-[#3713ec]' : 'text-slate-600 hover:bg-slate-50'}`}>
                             <span className="text-slate-400 mr-2">{lIdx + 1}.</span> {lesson.title}
                           </div>
                         )) : <div className="p-3 text-xs font-bold text-slate-400 text-center">강의 준비 중입니다.</div>}
@@ -324,22 +329,39 @@ const App = () => {
       </div>
 
       {/* 2. 메인 화면 영역 */}
-      <div className="flex-1 flex flex-col h-full relative overflow-hidden bg-slate-50">
-        <nav className="h-16 bg-white border-b border-slate-200 flex items-center justify-between md:justify-center px-6 shrink-0 shadow-sm z-10 relative">
-          <button onClick={() => setIsSidebarOpen(true)} className="md:hidden p-2 text-slate-500"><Menu size={24}/></button>
-          <div className="flex gap-4">
-            <button onClick={() => { setAppMode('class'); stopCurrentAudio(); }} className={`px-6 md:px-8 py-2 md:py-2.5 rounded-full text-xs md:text-sm font-black uppercase transition-all flex items-center gap-2 ${appMode === 'class' ? 'bg-[#3713ec] text-white shadow-lg scale-105' : 'bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-700'}`}><MonitorPlay size={18} /> Classroom</button>
-            <button onClick={() => { setAppMode('voca'); stopCurrentAudio(); }} className={`px-6 md:px-8 py-2 md:py-2.5 rounded-full text-xs md:text-sm font-black uppercase transition-all flex items-center gap-2 ${appMode === 'voca' ? 'bg-purple-600 text-white shadow-lg scale-105' : 'bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-700'}`}><BookA size={18} /> Vocabulary</button>
+      <div className="flex-1 flex flex-col h-full relative overflow-x-hidden">
+        
+        {/* ★ 모바일 상단 네비게이션: 배달의민족 스타일 (Pill Toggle) 교체 ★ */}
+        <nav className="h-16 bg-white border-b border-slate-100 flex items-center justify-between md:justify-center px-4 md:px-6 shrink-0 z-40 relative">
+          <button onClick={() => setIsSidebarOpen(true)} className="md:hidden p-2 text-slate-500 hover:text-slate-800"><Menu size={24}/></button>
+          
+          {/* Pill Toggle Switch */}
+          <div className="flex bg-slate-100 p-1 rounded-full relative w-48 md:w-64">
+            {/* 움직이는 배경 슬라이더 */}
+            <div 
+              className={`absolute top-1 bottom-1 w-[calc(50%-4px)] rounded-full transition-transform duration-300 ease-out shadow-sm ${appMode === 'class' ? 'translate-x-0 bg-[#3713ec]' : 'translate-x-[calc(100%+8px)] bg-purple-600'}`}
+            ></div>
+            
+            <button onClick={() => { setAppMode('class'); stopCurrentAudio(); }} className={`relative z-10 flex-1 py-1.5 md:py-2 text-[10px] md:text-xs font-black uppercase transition-colors flex items-center justify-center gap-1.5 ${appMode === 'class' ? 'text-white' : 'text-slate-500 hover:text-slate-800'}`}>
+              <MonitorPlay size={14} /> Class
+            </button>
+            <button onClick={() => { setAppMode('voca'); stopCurrentAudio(); }} className={`relative z-10 flex-1 py-1.5 md:py-2 text-[10px] md:text-xs font-black uppercase transition-colors flex items-center justify-center gap-1.5 ${appMode === 'voca' ? 'text-white' : 'text-slate-500 hover:text-slate-800'}`}>
+              <BookA size={14} /> Voca
+            </button>
           </div>
-          <div className="w-8 md:hidden"></div>
+          
+          <div className="w-10 md:hidden"></div> {/* 우측 밸런스용 빈 공간 */}
         </nav>
 
-        <div className="flex-1 overflow-y-auto custom-scrollbar relative">
+        <div className="flex-1 overflow-y-auto custom-scrollbar relative bg-white md:bg-transparent">
           {appMode === 'class' ? (
             selectedLesson ? (
-              <div className="max-w-4xl mx-auto p-4 md:p-8 space-y-6 md:space-y-8 animate-in fade-in zoom-in-95 duration-300">
-                <header className="space-y-2">
-                  <h1 className="text-2xl md:text-4xl font-black tracking-tight text-slate-900 korean-text">{selectedLesson.title}</h1>
+              // ★ 엣지-투-엣지 디자인: 모바일에서는 패딩 0, PC에서는 패딩 8 유지
+              <div className="max-w-4xl mx-auto md:p-8 w-full animate-in fade-in zoom-in-95 duration-300 pb-10">
+                
+                {/* 헤더 영역 (모바일 여백 축소) */}
+                <header className="px-5 py-6 md:px-0 md:py-0 md:mb-6 space-y-2 bg-white md:bg-transparent">
+                  <h1 className="text-2xl md:text-4xl font-black tracking-tight text-slate-900 korean-text leading-tight">{selectedLesson.title}</h1>
                   <div className="flex gap-4 text-[10px] md:text-xs font-bold text-slate-400 uppercase"><span className="flex items-center gap-1"><MonitorPlay size={14}/> {groupedClassData[selectedCourse].title}</span></div>
                 </header>
 
@@ -349,32 +371,42 @@ const App = () => {
                     const availableTabs = ['shorts', 'logic', 'commentary'].filter(t => selectedLesson.video_urls?.[t]);
                     if (availableTabs.length === 0) return null;
                     return (
-                      <section className="space-y-4">
-                        <div className="flex gap-2 overflow-x-auto pb-2 custom-scrollbar">
+                      <section className="w-full">
+                        <div className="flex gap-2 overflow-x-auto px-5 md:px-0 pb-3 md:pb-3 custom-scrollbar">
                           {availableTabs.map(t => (<button key={t} onClick={() => setVideoTab(t)} className={`px-6 py-2 rounded-full shrink-0 text-[10px] font-black uppercase transition-all ${videoTab === t ? 'bg-[#3713ec] text-white shadow-lg' : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-100'}`}>{t} Video</button>))}
                         </div>
-                        <div className="aspect-video bg-black rounded-2xl md:rounded-[2rem] shadow-xl relative border-4 border-slate-200 flex items-center justify-center">{renderMedia(selectedLesson?.video_urls?.[videoTab])}</div>
+                        {/* ★ 모바일 영상 영역: 테두리와 둥근 모서리 삭제하여 꽉 차게 렌더링 */}
+                        <div className="aspect-video w-full bg-black md:rounded-[2rem] md:shadow-xl relative md:border-4 border-slate-200 flex items-center justify-center">
+                          {renderMedia(selectedLesson?.video_urls?.[videoTab])}
+                        </div>
                       </section>
                     );
                   } else {
                     const subVideoUrl = selectedLesson?.video_urls?.video || selectedLesson?.video_urls?.shorts;
                     if (!subVideoUrl) return null;
-                    return (<section className="space-y-4"><div className="aspect-video bg-black rounded-2xl md:rounded-[2rem] shadow-xl relative border-4 border-slate-200 flex items-center justify-center">{renderMedia(subVideoUrl)}</div></section>);
+                    return (
+                      <section className="w-full mt-4 md:mt-0">
+                        <div className="aspect-video w-full bg-black md:rounded-[2rem] md:shadow-xl relative md:border-4 border-slate-200 flex items-center justify-center">
+                          {renderMedia(subVideoUrl)}
+                        </div>
+                      </section>
+                    );
                   }
                 })()}
                 
-                <section className="bg-white rounded-2xl md:rounded-[2rem] border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+                {/* ★ 교재 영역: 모바일에서는 테두리 제거 및 화면에 꽉 차게 렌더링 */}
+                <section className="bg-white md:rounded-[2rem] md:border border-slate-200 md:shadow-sm overflow-hidden flex flex-col md:mt-8 border-t border-slate-100">
                   <div className="flex border-b border-slate-100">
-                    <button onClick={() => setContentTab('pdf')} className={`flex-1 py-3 md:py-4 text-[10px] md:text-xs font-black tracking-widest transition-all flex items-center justify-center gap-1 md:gap-2 ${contentTab === 'pdf' ? 'text-[#3713ec] bg-blue-50/50' : 'text-slate-400 hover:bg-slate-50'}`}><FileText size={16}/> TEXTBOOK</button>
-                    <button onClick={() => setContentTab('script')} className={`flex-1 py-3 md:py-4 text-[10px] md:text-xs font-black tracking-widest transition-all flex items-center justify-center gap-1 md:gap-2 ${contentTab === 'script' ? 'text-[#3713ec] bg-blue-50/50' : 'text-slate-400 hover:bg-slate-50'}`}><Mic size={16}/> SHADOWING</button>
+                    <button onClick={() => setContentTab('pdf')} className={`flex-1 py-4 text-[10px] md:text-xs font-black tracking-widest transition-all flex items-center justify-center gap-1.5 md:gap-2 ${contentTab === 'pdf' ? 'text-[#3713ec] bg-blue-50/50' : 'text-slate-400 hover:bg-slate-50'}`}><FileText size={16}/> TEXTBOOK</button>
+                    <button onClick={() => setContentTab('script')} className={`flex-1 py-4 text-[10px] md:text-xs font-black tracking-widest transition-all flex items-center justify-center gap-1.5 md:gap-2 ${contentTab === 'script' ? 'text-[#3713ec] bg-blue-50/50' : 'text-slate-400 hover:bg-slate-50'}`}><Mic size={16}/> SHADOWING</button>
                   </div>
                   
-                  <div className="min-h-[500px] bg-slate-50/30">
+                  <div className="min-h-[500px] w-full bg-slate-50/30">
                     {contentTab === 'pdf' ? (
                       selectedLesson.course === 'MAIN233' ? (
                         selectedLesson.pdf_url ? (
-/* ★ Plan C: 초고속 독립형 뷰어 + 버니넷 다이렉트 연결 ★ */
-                          <div className="w-full h-[600px] md:h-[800px] bg-[#525659] rounded-b-2xl md:rounded-b-[2rem] overflow-hidden relative">
+                          /* ★ 독립형 뷰어 연결 (버니넷 우회) ★ */
+                          <div className="w-full h-[600px] md:h-[800px] bg-[#525659] md:rounded-b-[2rem] overflow-hidden relative">
                             {isMobile ? (
                               <iframe 
                                 src={`/pdfjs/web/viewer.html?file=${encodeURIComponent(getBunnyPdfUrl(selectedLesson.pdf_url))}`}
@@ -392,8 +424,8 @@ const App = () => {
                         ) : (<div className="flex flex-col items-center justify-center h-[400px] text-slate-400"><FileText size={48} className="mb-4 opacity-30"/><p className="font-bold text-sm">이 강의는 PDF 교재가 없습니다.</p></div>)
                       ) : (
                         selectedLesson.web_content ? (
-                          /* ★ 웹교재 렌더링 & 이벤트 위임 타겟 연결 ★ */
-                          <div className="w-full h-auto bg-white p-0" ref={webContentRef}>
+                          /* 웹교재 모바일 여백 최소화 */
+                          <div className="w-full h-auto bg-white p-4 md:p-8" ref={webContentRef}>
                             <div className="w-full text-left text-slate-800 leading-relaxed overflow-x-hidden" dangerouslySetInnerHTML={{ __html: selectedLesson.web_content }} />
                           </div>
                         ) : (<div className="flex flex-col items-center justify-center h-[400px] text-slate-400"><FileText size={48} className="mb-4 opacity-30"/><p className="font-bold text-sm">웹 교재가 아직 등록되지 않았습니다.</p></div>)
@@ -402,7 +434,7 @@ const App = () => {
                       <div className="p-4 md:p-8 space-y-3">
                         {selectedLesson.script && selectedLesson.script.length > 0 ? (
                           selectedLesson.script.map((line, idx) => (
-                            <div key={idx} className="flex items-center gap-3 md:gap-4 p-3 md:p-6 bg-white hover:bg-blue-50/50 border border-slate-100 hover:border-blue-200 rounded-2xl transition-all shadow-sm group">
+                            <div key={idx} className="flex items-center gap-3 md:gap-4 p-4 md:p-6 bg-white hover:bg-blue-50/50 border border-slate-100 hover:border-blue-200 rounded-2xl transition-all shadow-sm group">
                               <button onClick={() => { const audioUrl = `${CLASS_AUDIO_BASE_URL}/${line.audio}`; playAudio(audioUrl, 'class', `${selectedLesson.lesson_id}_${idx}`); }} className="w-10 h-10 md:w-12 md:h-12 shrink-0 rounded-full bg-slate-50 border border-slate-200 text-slate-400 flex items-center justify-center group-hover:bg-[#3713ec] group-hover:text-white group-hover:border-[#3713ec] transition-all shadow-sm"><Volume2 size={18} /></button>
                               <div className="flex-1"><span className="text-[10px] font-bold text-[#3713ec] uppercase tracking-wider mb-1 block">{line.type || `Pattern ${idx + 1}`}</span><p className="text-base md:text-lg font-bold text-slate-800 korean-text leading-snug break-keep">{line.ko}</p><p className="text-xs md:text-sm text-slate-500 mt-1 italic">{line.en}</p></div>
                             </div>
@@ -412,22 +444,34 @@ const App = () => {
                     )}
                   </div>
                 </section>
+
+                {/* ★ 모바일 강의실 전용 PREV/NEXT 네비게이션 버튼 추가 ★ */}
+                <footer className="flex justify-between items-center p-5 md:p-0 mt-2 md:mt-8 border-t border-slate-100 md:border-none bg-white md:bg-transparent">
+                  {prevLesson ? (
+                    <button onClick={() => { setSelectedLesson(prevLesson); window.scrollTo(0,0); }} className="flex items-center gap-1 md:gap-2 px-4 md:px-6 py-2.5 md:py-3 rounded-xl font-bold text-slate-500 hover:bg-slate-100 transition-all text-xs md:text-sm"><ChevronLeft size={16} /> <span className="hidden sm:inline">PREV LESSON</span><span className="sm:hidden">PREV</span></button>
+                  ) : <div></div>}
+                  
+                  {nextLesson ? (
+                    <button onClick={() => { setSelectedLesson(nextLesson); window.scrollTo(0,0); }} className="flex items-center gap-1 md:gap-2 px-5 md:px-8 py-2.5 md:py-3 bg-slate-900 text-white rounded-xl font-bold shadow-lg hover:scale-105 transition-all text-xs md:text-sm"><span className="hidden sm:inline">NEXT LESSON</span><span className="sm:hidden">NEXT</span> <ChevronRight size={16}/></button>
+                  ) : <div></div>}
+                </footer>
+
               </div>
             ) : (<div className="flex h-full items-center justify-center text-slate-400 font-bold">좌측에서 레슨을 선택해주세요.</div>)
           ) : (
-            <div className="flex-1 flex flex-col h-full relative overflow-hidden">
+            <div className="flex-1 flex flex-col h-full relative overflow-hidden bg-white md:bg-[#f6f6f8]">
               {showGuideMain ? (<GuideBook />) : !activeWord ? (
-                <div className="flex-1 overflow-y-auto p-6 md:p-10 custom-scrollbar animate-in fade-in duration-300">
-                  <header className="mb-8 flex items-center justify-between"><div className="flex-1"><div className="flex items-center gap-2 text-purple-600 font-bold text-xs mb-1 uppercase tracking-wider"><Zap size={14} /> Matrix Learning System</div><h2 className="text-2xl md:text-3xl font-bold text-slate-900">{activeChapter?.title}</h2></div></header>
-                  <div className="mb-8 bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-4"><div className="flex-1"><div className="flex justify-between items-center mb-2"><span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Chapter Progress</span><span className="text-sm font-bold text-purple-600">{getChapterProgress(activeChapter)}%</span></div><div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden"><div className="h-full bg-purple-600 transition-all duration-1000" style={{ width: `${getChapterProgress(activeChapter)}%` }}></div></div></div></div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5 pb-10">
+                <div className="flex-1 overflow-y-auto p-5 md:p-10 custom-scrollbar animate-in fade-in duration-300">
+                  <header className="mb-6 md:mb-8 flex items-center justify-between"><div className="flex-1"><div className="flex items-center gap-2 text-purple-600 font-bold text-xs mb-1 uppercase tracking-wider"><Zap size={14} /> Matrix Learning System</div><h2 className="text-2xl md:text-3xl font-bold text-slate-900">{activeChapter?.title}</h2></div></header>
+                  <div className="mb-6 md:mb-8 bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-4"><div className="flex-1"><div className="flex justify-between items-center mb-2"><span className="text-[10px] md:text-xs font-bold text-slate-500 uppercase tracking-wider">Chapter Progress</span><span className="text-xs md:text-sm font-bold text-purple-600">{getChapterProgress(activeChapter)}%</span></div><div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden"><div className="h-full bg-purple-600 transition-all duration-1000" style={{ width: `${getChapterProgress(activeChapter)}%` }}></div></div></div></div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-5 pb-10">
                     {activeChapter?.words.map((word, idx) => {
                       const isVisited = progress.visitedWords.includes(word.id);
                       return (
-                        <div key={idx} onClick={() => handleWordSelect(word)} className={`bg-white p-6 rounded-2xl border-b-4 transition-all cursor-pointer shadow-sm group relative ${isVisited ? 'border-purple-600 bg-purple-50/10' : 'border-slate-100 hover:border-purple-600 hover:-translate-y-1'}`}>
+                        <div key={idx} onClick={() => handleWordSelect(word)} className={`bg-white p-5 md:p-6 rounded-2xl border-b-4 transition-all cursor-pointer shadow-sm group relative ${isVisited ? 'border-purple-600 bg-purple-50/10' : 'border-slate-100 hover:border-purple-600 hover:-translate-y-1'}`}>
                           {isVisited && <div className="absolute top-4 right-4 text-purple-600"><CheckCircle2 size={20} className="fill-purple-100" /></div>}
-                          <h4 className={`text-2xl font-bold my-1 transition-colors korean-text ${isVisited ? 'text-purple-600' : 'text-slate-800 group-hover:text-purple-600'}`}>{word.word}</h4>
-                          <p className="text-sm font-medium text-slate-500">{word.meaning}</p>
+                          <h4 className={`text-xl md:text-2xl font-bold my-1 transition-colors korean-text ${isVisited ? 'text-purple-600' : 'text-slate-800 group-hover:text-purple-600'}`}>{word.word}</h4>
+                          <p className="text-xs md:text-sm font-medium text-slate-500">{word.meaning}</p>
                         </div>
                       );
                     })}
@@ -435,22 +479,22 @@ const App = () => {
                 </div>
               ) : (
                 <div className="flex-1 flex flex-col overflow-hidden bg-[#f6f6f8] animate-in fade-in duration-300">
-                  <header className="bg-white border-b border-slate-200 px-6 py-4 flex justify-between items-center shrink-0"><button onClick={() => setActiveWord(null)} className="flex items-center gap-2 text-slate-500 font-bold text-sm hover:text-purple-600 transition-all"><ArrowLeft size={18} /> Back to List</button><div className="flex items-center gap-4"><button onClick={toggleSpeed} className="flex items-center gap-1 bg-purple-600/10 px-3 py-1.5 rounded-full text-xs font-bold text-purple-600"><Gauge size={14} /> {playbackRate}x</button></div></header>
+                  <header className="bg-white border-b border-slate-200 px-4 md:px-6 py-3 md:py-4 flex justify-between items-center shrink-0"><button onClick={() => setActiveWord(null)} className="flex items-center gap-2 text-slate-500 font-bold text-xs md:text-sm hover:text-purple-600 transition-all"><ArrowLeft size={16} /> Back</button><div className="flex items-center gap-4"><button onClick={toggleSpeed} className="flex items-center gap-1 bg-purple-600/10 px-3 py-1.5 rounded-full text-xs font-bold text-purple-600"><Gauge size={14} /> {playbackRate}x</button></div></header>
                   <main className="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar">
-                    <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-                      <div className="lg:col-span-5 space-y-6">
-                        <div className="bg-white rounded-3xl p-8 shadow-sm border border-slate-100"><h2 className="text-5xl font-black text-slate-900 mb-2 korean-text">{activeWord.word}</h2><p className="text-xl text-slate-500 font-medium mb-6">{activeWord.meaning}</p><button onClick={() => playAudio(getAudioUrl(activeWord.id), 'word', activeWord.id)} className="w-12 h-12 bg-slate-50 rounded-full flex items-center justify-center text-slate-400 hover:bg-purple-600 hover:text-white transition-all shadow-inner"><Volume2 size={20} /></button></div>
-                        <div className="bg-purple-600 rounded-3xl p-8 md:p-10 text-white shadow-xl min-h-[300px] flex flex-col justify-center relative overflow-hidden"><span className="text-white/50 text-[10px] font-bold uppercase tracking-widest block mb-4">Pattern {currentExIdx + 1}: {activeWord.examples[currentExIdx]?.type}</span><h3 className="text-3xl md:text-4xl font-bold mb-4 korean-text break-keep leading-snug">{activeWord.examples[currentExIdx]?.ko}</h3><p className="text-white/70 text-lg mb-10 font-medium italic">{activeWord.examples[currentExIdx]?.en}</p><button onClick={() => playAudio(getAudioUrl(activeWord.id, currentExIdx), 'example', `${activeWord.id}_${currentExIdx}`)} className="w-16 h-16 bg-white text-purple-600 rounded-full flex items-center justify-center shadow-lg hover:scale-110 active:scale-95 transition-transform"><Volume2 size={32} className="fill-current" /></button></div>
+                    <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6 md:gap-8 items-start">
+                      <div className="lg:col-span-5 space-y-4 md:space-y-6">
+                        <div className="bg-white rounded-2xl md:rounded-3xl p-6 md:p-8 shadow-sm border border-slate-100"><h2 className="text-4xl md:text-5xl font-black text-slate-900 mb-2 korean-text">{activeWord.word}</h2><p className="text-lg md:text-xl text-slate-500 font-medium mb-6">{activeWord.meaning}</p><button onClick={() => playAudio(getAudioUrl(activeWord.id), 'word', activeWord.id)} className="w-12 h-12 bg-slate-50 rounded-full flex items-center justify-center text-slate-400 hover:bg-purple-600 hover:text-white transition-all shadow-inner"><Volume2 size={20} /></button></div>
+                        <div className="bg-purple-600 rounded-2xl md:rounded-3xl p-6 md:p-10 text-white shadow-xl min-h-[250px] md:min-h-[300px] flex flex-col justify-center relative overflow-hidden"><span className="text-white/50 text-[10px] font-bold uppercase tracking-widest block mb-4">Pattern {currentExIdx + 1}: {activeWord.examples[currentExIdx]?.type}</span><h3 className="text-2xl md:text-4xl font-bold mb-4 korean-text break-keep leading-snug">{activeWord.examples[currentExIdx]?.ko}</h3><p className="text-white/70 text-base md:text-lg mb-8 md:mb-10 font-medium italic">{activeWord.examples[currentExIdx]?.en}</p><button onClick={() => playAudio(getAudioUrl(activeWord.id, currentExIdx), 'example', `${activeWord.id}_${currentExIdx}`)} className="w-14 h-14 md:w-16 md:h-16 bg-white text-purple-600 rounded-full flex items-center justify-center shadow-lg hover:scale-110 active:scale-95 transition-transform"><Volume2 size={28} className="fill-current" /></button></div>
                       </div>
-                      <div className="lg:col-span-7 bg-white rounded-3xl shadow-sm border border-slate-100 flex flex-col h-full lg:max-h-[650px] overflow-hidden">
-                        <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
-                          <div className="grid grid-cols-1 gap-3">
+                      <div className="lg:col-span-7 bg-white rounded-2xl md:rounded-3xl shadow-sm border border-slate-100 flex flex-col h-full lg:max-h-[650px] overflow-hidden">
+                        <div className="flex-1 overflow-y-auto p-4 md:p-6 custom-scrollbar">
+                          <div className="grid grid-cols-1 gap-2 md:gap-3">
                             {activeWord.examples.map((ex, idx) => {
                               const isPlayed = progress.playedExamples.includes(`${activeWord.id}_${idx}`);
                               return (
-                                <button key={idx} onClick={() => { setCurrentExIdx(idx); playAudio(getAudioUrl(activeWord.id, idx), 'example', `${activeWord.id}_${idx}`); }} className={`flex items-center gap-4 p-4 rounded-2xl border-2 transition-all text-left group ${currentExIdx === idx ? 'border-purple-600 bg-purple-600 text-white shadow-lg' : 'border-slate-50 bg-slate-50/50 hover:border-purple-600/30 text-slate-600'}`}>
+                                <button key={idx} onClick={() => { setCurrentExIdx(idx); playAudio(getAudioUrl(activeWord.id, idx), 'example', `${activeWord.id}_${idx}`); }} className={`flex items-center gap-3 md:gap-4 p-3 md:p-4 rounded-xl md:rounded-2xl border-2 transition-all text-left group ${currentExIdx === idx ? 'border-purple-600 bg-purple-600 text-white shadow-lg' : 'border-slate-50 bg-slate-50/50 hover:border-purple-600/30 text-slate-600'}`}>
                                   <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 font-bold text-xs transition-colors ${currentExIdx === idx ? 'bg-white/20 text-white' : isPlayed ? 'bg-green-100 text-green-600' : 'bg-white text-slate-300'}`}>{isPlayed ? <Check size={14}/> : idx + 1}</div>
-                                  <div className="flex-1 overflow-hidden"><p className={`text-[10px] font-bold uppercase mb-0.5 tracking-tighter ${currentExIdx === idx ? 'text-white/60' : 'text-slate-400'}`}>{ex.type}</p><p className="font-bold korean-text truncate">{ex.ko}</p></div>
+                                  <div className="flex-1 overflow-hidden"><p className={`text-[10px] font-bold uppercase mb-0.5 tracking-tighter ${currentExIdx === idx ? 'text-white/60' : 'text-slate-400'}`}>{ex.type}</p><p className="font-bold text-sm md:text-base korean-text truncate">{ex.ko}</p></div>
                                 </button>
                               );
                             })}
@@ -460,8 +504,8 @@ const App = () => {
                     </div>
                   </main>
                   <footer className="bg-white border-t border-slate-100 p-4 flex justify-between items-center shrink-0">
-                    <button onClick={() => { const idx = activeChapter.words.findIndex(w => w.id === activeWord.id); if(idx > 0) handleWordSelect(activeChapter.words[idx-1]); }} className="flex items-center gap-2 px-6 py-3 rounded-xl font-bold text-slate-400 hover:bg-slate-50 transition-all"><ChevronLeft /> PREV</button>
-                    <button onClick={() => { const idx = activeChapter.words.findIndex(w => w.id === activeWord.id); if(idx < activeChapter.words.length - 1) handleWordSelect(activeChapter.words[idx+1]); }} className="flex items-center gap-2 px-8 py-3 bg-slate-900 text-white rounded-xl font-bold shadow-lg hover:scale-105 transition-all">NEXT WORD <ChevronRight /></button>
+                    <button onClick={() => { const idx = activeChapter.words.findIndex(w => w.id === activeWord.id); if(idx > 0) handleWordSelect(activeChapter.words[idx-1]); }} className="flex items-center gap-1 md:gap-2 px-4 md:px-6 py-2.5 md:py-3 rounded-xl font-bold text-slate-400 hover:bg-slate-50 transition-all text-xs md:text-sm"><ChevronLeft size={16} /> PREV</button>
+                    <button onClick={() => { const idx = activeChapter.words.findIndex(w => w.id === activeWord.id); if(idx < activeChapter.words.length - 1) handleWordSelect(activeChapter.words[idx+1]); }} className="flex items-center gap-1 md:gap-2 px-6 md:px-8 py-2.5 md:py-3 bg-slate-900 text-white rounded-xl font-bold shadow-lg hover:scale-105 transition-all text-xs md:text-sm">NEXT WORD <ChevronRight size={16} /></button>
                   </footer>
                 </div>
               )}
