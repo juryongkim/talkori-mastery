@@ -18,6 +18,91 @@ const CLASS_AUDIO_BASE_URL = `${BUNNY_CDN_HOST}/audio_class`;
 const PDF_CDN_BASE_URL = `${BUNNY_CDN_HOST}/pdf-re`; 
 const STORAGE_KEY = 'talkori_progress_v1';
 
+// ★ 수술 1: 스마트 유튜브 플레이어 부품 추가 ★
+const YouTubePlayer = ({ videoId }) => {
+  const playerRef = useRef(null);
+  const ytPlayerRef = useRef(null);
+  const [pointA, setPointA] = useState(null);
+  const [pointB, setPointB] = useState(null);
+  const loopIntervalRef = useRef(null);
+
+  useEffect(() => {
+    if (!window.YT) {
+      const tag = document.createElement('script');
+      tag.src = "https://www.youtube.com/iframe_api";
+      const firstScriptTag = document.getElementsByTagName('script')[0];
+      firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+    }
+
+    const initPlayer = () => {
+      if (!playerRef.current) return;
+      ytPlayerRef.current = new window.YT.Player(playerRef.current, {
+        videoId: videoId,
+        playerVars: { rel: 0, playsinline: 1, enablejsapi: 1 },
+        events: {
+          onStateChange: (e) => {
+            if (e.data === window.YT.PlayerState.PLAYING) startLoopCheck();
+            else stopLoopCheck();
+          }
+        }
+      });
+    };
+
+    if (window.YT && window.YT.Player) { initPlayer(); } 
+    else {
+      const prev = window.onYouTubeIframeAPIReady;
+      window.onYouTubeIframeAPIReady = () => { if (prev) prev(); initPlayer(); };
+    }
+
+    return () => {
+      stopLoopCheck();
+      if (ytPlayerRef.current && ytPlayerRef.current.destroy) ytPlayerRef.current.destroy();
+    };
+  }, [videoId]);
+
+  const startLoopCheck = () => {
+    stopLoopCheck();
+    loopIntervalRef.current = setInterval(() => {
+      if (ytPlayerRef.current && ytPlayerRef.current.getCurrentTime && pointA !== null && pointB !== null) {
+        if (ytPlayerRef.current.getCurrentTime() >= pointB) ytPlayerRef.current.seekTo(pointA);
+      }
+    }, 100);
+  };
+
+  const stopLoopCheck = () => { if (loopIntervalRef.current) clearInterval(loopIntervalRef.current); };
+
+  const skip = (seconds) => {
+    if (ytPlayerRef.current && ytPlayerRef.current.getCurrentTime) {
+      ytPlayerRef.current.seekTo(ytPlayerRef.current.getCurrentTime() + seconds);
+    }
+  };
+
+  const toggleABRepeat = () => {
+    if (!ytPlayerRef.current || !ytPlayerRef.current.getCurrentTime) return;
+    const currentTime = ytPlayerRef.current.getCurrentTime();
+    if (pointA === null) { setPointA(currentTime); } 
+    else if (pointB === null) {
+      if (currentTime > pointA) { setPointB(currentTime); ytPlayerRef.current.seekTo(pointA); ytPlayerRef.current.playVideo(); } 
+      else { setPointA(null); }
+    } else { setPointA(null); setPointB(null); }
+  };
+
+  return (
+    <div className="w-full flex flex-col w-full h-full bg-black">
+      <div className="aspect-video w-full relative bg-black">
+        <div ref={playerRef} className="absolute top-0 left-0 w-full h-full"></div>
+      </div>
+      <div className="w-full bg-slate-900 p-3 md:p-4 flex items-center justify-center gap-2 md:gap-4 text-white shrink-0 z-10">
+        <button onClick={() => skip(-5)} className="px-3 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-xs md:text-sm font-bold flex items-center gap-1 transition-colors"><ChevronLeft size={16}/> 5s</button>
+        <button onClick={toggleABRepeat} className={`px-4 py-2 rounded-lg text-xs md:text-sm font-bold transition-colors border ${pointA !== null && pointB !== null ? 'bg-[#3713ec] border-[#3713ec] text-white shadow-lg shadow-[#3713ec]/50' : pointA !== null ? 'bg-blue-500 border-blue-500 text-white animate-pulse' : 'bg-slate-800 border-slate-700 hover:bg-slate-700 text-slate-300'}`}>
+          {pointA === null ? 'A-B Repeat' : pointB === null ? 'Set B Point' : '🔄 Repeating A-B'}
+        </button>
+        <button onClick={() => skip(5)} className="px-3 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-xs md:text-sm font-bold flex items-center gap-1 transition-colors">5s <ChevronRight size={16}/></button>
+      </div>
+    </div>
+  );
+};
+
 const App = () => {
   const [appMode, setAppMode] = useState('class'); 
   const isDemoMode = new URLSearchParams(window.location.search).get('demo') === 'true';
@@ -348,24 +433,27 @@ const App = () => {
     };
   }, [selectedLesson, contentTab, appMode]);
 
+// ★ 수술 2: 리모컨 부품을 렌더링하도록 교체 ★
   const renderMedia = (url) => {
-    if (!url) return <div className="text-white/50 font-bold flex flex-col items-center gap-2 h-full justify-center"><MonitorPlay size={40} className="opacity-50"/>영상/음원이 아직 준비되지 않았습니다.</div>;
+    if (!url) return <div className="aspect-video w-full flex flex-col items-center justify-center text-white/50 font-bold gap-2"><MonitorPlay size={40} className="opacity-50"/>영상/음원이 아직 준비되지 않았습니다.</div>;
+    
     if (url.includes('youtu.be') || url.includes('youtube.com')) {
       let vid = "";
       if (url.includes('youtu.be/')) vid = url.split('youtu.be/')[1]?.split('?')[0];
       else if (url.includes('v=')) vid = url.split('v=')[1]?.split('&')[0];
       else if (url.includes('embed/')) vid = url.split('embed/')[1]?.split('?')[0];
-      return <iframe className="w-full h-full md:rounded-[2rem]" src={`https://www.youtube.com/embed/${vid}?rel=0`} allowFullScreen></iframe>;
+      return <YouTubePlayer videoId={vid} />;
     }
+    
     if (url.match(/\.(m4a|mp3|wav)$/i)) {
       return (
-        <div className="flex flex-col items-center justify-center w-full h-full bg-slate-900 md:rounded-[2rem]">
+        <div className="aspect-video w-full flex flex-col items-center justify-center bg-slate-900">
           <Volume2 size={48} className="text-white/30 mb-6" />
           <audio controls src={url} className="w-3/4 outline-none"></audio>
         </div>
       );
     }
-    return <video controls src={url} className="w-full h-full object-contain outline-none md:rounded-[2rem] bg-black"></video>;
+    return <video controls src={url} className="aspect-video w-full object-contain outline-none bg-black"></video>;
   };
 
   // ★ 현재 강의 기준 이전/다음 강의 찾기 로직
@@ -485,6 +573,7 @@ const App = () => {
                   <div className="flex gap-4 text-[10px] md:text-xs font-bold text-slate-400 uppercase"><span className="flex items-center gap-1"><MonitorPlay size={14}/> {groupedClassData[selectedCourse].title}</span></div>
                 </header>
 
+{/* ★ 수술 3: 리모컨이 들어갈 수 있도록 액자 사이즈 조절 ★ */}
                 {(() => {
                   const isMainCourse = selectedLesson.course === 'MAIN233';
                   if (isMainCourse) {
@@ -495,8 +584,7 @@ const App = () => {
                         <div className="flex gap-2 overflow-x-auto px-5 md:px-0 pb-3 md:pb-3 custom-scrollbar">
                           {availableTabs.map(t => (<button key={t} onClick={() => setVideoTab(t)} className={`px-6 py-2 rounded-full shrink-0 text-[10px] font-black uppercase transition-all ${videoTab === t ? 'bg-[#3713ec] text-white shadow-lg' : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-100'}`}>{t} Video</button>))}
                         </div>
-                        {/* ★ 모바일 영상 영역: 테두리와 둥근 모서리 삭제하여 꽉 차게 렌더링 */}
-                        <div className="aspect-video w-full bg-black md:rounded-[2rem] md:shadow-xl relative md:border-4 border-slate-200 flex items-center justify-center">
+                        <div className="w-full bg-black md:rounded-[2rem] md:shadow-xl relative md:border-4 border-slate-200 flex flex-col items-center justify-center overflow-hidden">
                           {renderMedia(selectedLesson?.video_urls?.[videoTab])}
                         </div>
                       </section>
@@ -506,7 +594,7 @@ const App = () => {
                     if (!subVideoUrl) return null;
                     return (
                       <section className="w-full mt-4 md:mt-0">
-                        <div className="aspect-video w-full bg-black md:rounded-[2rem] md:shadow-xl relative md:border-4 border-slate-200 flex items-center justify-center">
+                        <div className="w-full bg-black md:rounded-[2rem] md:shadow-xl relative md:border-4 border-slate-200 flex flex-col items-center justify-center overflow-hidden">
                           {renderMedia(subVideoUrl)}
                         </div>
                       </section>
