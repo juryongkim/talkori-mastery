@@ -29,6 +29,12 @@ const App = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
   const isMobile = windowWidth <= 768;
+  // ★ 버니넷 다이렉트 주소 변환기 추가
+  const getBunnyPdfUrl = (url) => {
+    if (!url) return "";
+    const fileName = url.split('/').pop(); 
+    return `${PDF_CDN_BASE_URL}/${encodeURIComponent(fileName)}`; 
+  };
 
   // 웹 교재(HTML) 영역 참조
   const webContentRef = useRef(null);
@@ -367,17 +373,15 @@ const App = () => {
                     {contentTab === 'pdf' ? (
                       selectedLesson.course === 'MAIN233' ? (
                         selectedLesson.pdf_url ? (
-/* ★ Plan C: 구글 뷰어 제거 + 초고속 독립형 전용 뷰어 탑재 ★ */
+/* ★ Plan C: 초고속 독립형 뷰어 + 버니넷 다이렉트 연결 ★ */
                           <div className="w-full h-[600px] md:h-[800px] bg-[#525659] rounded-b-2xl md:rounded-b-[2rem] overflow-hidden relative">
                             {isMobile ? (
-                              /* 모바일: 우리가 방금 넣은 전용 뷰어를 호출해서 띄웁니다! */
                               <iframe 
-                                src={`/pdfjs/web/viewer.html?file=${encodeURIComponent(selectedLesson.pdf_url)}`}
+                                src={`/pdfjs/web/viewer.html?file=${encodeURIComponent(getBunnyPdfUrl(selectedLesson.pdf_url))}`}
                                 className="w-full h-full border-0"
                                 title="Talkori Textbook Mobile"
                               />
                             ) : (
-                              /* PC: 크롬 네이티브 뷰어 유지 (가장 빠름) */
                               <iframe 
                                 src={`${selectedLesson.pdf_url}#toolbar=0&navpanes=0&view=FitH`}
                                 className="w-full h-full border-0"
