@@ -7,6 +7,14 @@ import {
   CheckCircle2, Check, MonitorPlay, BookA, ChevronDown, FileText, Mic
 } from 'lucide-react';
 
+// ★ 자체 PDF 엔진 부품 불러오기
+import { pdfjs, Document, Page } from 'react-pdf';
+import 'react-pdf/dist/esm/Page/AnnotationLayer.css';
+import 'react-pdf/dist/esm/Page/TextLayer.css';
+
+// PDF 워커(보조 일꾼) 설정 (버전에 맞는 일꾼을 CDN에서 데려옵니다)
+pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+
 import classData from './class_data.json';
 import vocaData from './voca_data.json';
 
@@ -21,10 +29,21 @@ const App = () => {
   const [appMode, setAppMode] = useState('class'); 
   const isDemoMode = new URLSearchParams(window.location.search).get('demo') === 'true';
 
+  // 창 크기를 계산해서 모바일일 때 PDF 크기를 딱 맞게 조절하기 위한 상태
+  const [windowWidth, setWindowWidth] = useState(window.innerWidth);
+  useEffect(() => {
+    const handleResize = () => setWindowWidth(window.innerWidth);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+  const isMobile = windowWidth <= 768;
+
+  // PDF 페이지 수 상태
+  const [numPages, setNumPages] = useState(null);
+
   // ==========================================
-  // [웹 교재 (HTML) 퀴즈 스크립트 전역 주입]
+  // [웹 교재 (HTML) 필수 스크립트 전역 주입]
   // ==========================================
-  // 리액트가 무시한 HTML 안의 handleChoice 함수를 전역으로 살려냅니다.
   useEffect(() => {
     window.handleChoice = (element, isCorrect, feedbackId) => {
       const parentContainer = element.closest('.flex-col');
@@ -56,8 +75,19 @@ const App = () => {
           resultText.style.color = "#ef4444";
         }
       }
-
       if (feedbackArea) feedbackArea.classList.remove('hidden');
+    };
+
+    window.toggleDesire = (id) => {
+      const switchEl = document.getElementById('switch-' + id);
+      const korText = document.getElementById('kor-' + id);
+      const engText = document.getElementById('eng-' + id);
+      if (!switchEl || !korText || !engText) return;
+      
+      const isChecked = switchEl.checked;
+      korText.innerText = isChecked ? korText.getAttribute('data-opt2') : korText.getAttribute('data-opt1');
+      engText.innerText = isChecked ? engText.getAttribute('data-eng2') : engText.getAttribute('data-eng1');
+      korText.style.color = isChecked ? '#526ae5' : '#1e293b';
     };
   }, []);
 
@@ -69,9 +99,7 @@ const App = () => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       return saved ? JSON.parse(saved) : { visitedWords: [], playedExamples: [] };
-    } catch (e) {
-      return { visitedWords: [], playedExamples: [] };
-    }
+    } catch (e) { return { visitedWords: [], playedExamples: [] }; }
   });
 
   const saveProgress = (newProgress) => {
@@ -84,12 +112,8 @@ const App = () => {
     const groups = {};
     vocaData.forEach(item => {
       const dayKey = String(item.day || "1");
-      if (!groups[dayKey]) {
-        groups[dayKey] = { chapterId: dayKey, title: `Day ${dayKey}: ${item.situation || "Learning"}`, words: [] };
-      }
-      groups[dayKey].words.push({
-        id: String(item.id), word: item.word, meaning: item.meaning, usage_note: item.usage_note, examples: item.examples || []
-      });
+      if (!groups[dayKey]) groups[dayKey] = { chapterId: dayKey, title: `Day ${dayKey}: ${item.situation || "Learning"}`, words: [] };
+      groups[dayKey].words.push({ id: String(item.id), word: item.word, meaning: item.meaning, usage_note: item.usage_note, examples: item.examples || [] });
     });
     const allChapters = Object.values(groups);
     if (isDemoMode) return allChapters.slice(0, 3);
@@ -103,15 +127,10 @@ const App = () => {
   const [playbackRate, setPlaybackRate] = useState(1.0);
   const audioRef = useRef(null);
 
-  useEffect(() => {
-    if (CURRICULUM.length > 0 && !activeChapter) setActiveChapter(CURRICULUM[0]);
-  }, [CURRICULUM]);
-
+  useEffect(() => { if (CURRICULUM.length > 0 && !activeChapter) setActiveChapter(CURRICULUM[0]); }, [CURRICULUM]);
   useEffect(() => { stopCurrentAudio(); }, [activeWord, activeChapter, showGuideMain, appMode]);
 
-  const stopCurrentAudio = () => {
-    if (audioRef.current) { audioRef.current.pause(); audioRef.current.currentTime = 0; }
-  };
+  const stopCurrentAudio = () => { if (audioRef.current) { audioRef.current.pause(); audioRef.current.currentTime = 0; } };
 
   const playAudio = (url, type, id) => {
     stopCurrentAudio();
@@ -138,11 +157,7 @@ const App = () => {
   };
 
   const toggleSpeed = () => setPlaybackRate(prev => (prev === 1.0 ? 0.8 : prev === 0.8 ? 0.6 : 1.0));
-
-  const handleExit = () => {
-    if (isDemoMode) window.parent.location.href = SALES_PAGE_URL;
-    else window.parent.postMessage('exit_talkori', '*');
-  };
+  const handleExit = () => { if (isDemoMode) window.parent.location.href = SALES_PAGE_URL; else window.parent.postMessage('exit_talkori', '*'); };
 
   const getChapterProgress = (chapter) => {
     if (!chapter || !chapter.words) return 0;
@@ -172,22 +187,6 @@ const App = () => {
           </div>
           <h1 className="text-4xl md:text-5xl font-black text-slate-900 mb-6 leading-tight">You know the words.<br/><span className="text-[#3713ec]">So why do you freeze?</span></h1>
           <p className="text-lg text-slate-500 max-w-2xl mx-auto leading-relaxed">Stop memorizing lists like <span className="font-bold bg-slate-100 px-2 py-0.5 rounded text-slate-700">Delicious = 맛있다</span>.<br className="hidden md:block"/> Real conversations don't happen in single words.</p>
-        </section>
-        <section className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-8 animate-in slide-in-from-bottom-4 duration-700 delay-100">
-          <div className="bg-slate-50 p-8 rounded-3xl border border-slate-100 flex flex-col items-center text-center opacity-70 grayscale transition-all hover:grayscale-0 hover:opacity-100 group">
-            <div className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">The Old Way</div>
-            <div className="text-3xl font-bold text-slate-400 mb-2 line-through decoration-red-400 decoration-4 group-hover:text-slate-600 transition-colors">Delicious</div>
-            <p className="text-sm text-slate-400">Just a frozen word. <br/>You can't use this in real life.</p>
-          </div>
-          <div className="bg-[#3713ec] p-8 rounded-3xl shadow-xl shadow-[#3713ec]/20 flex flex-col items-center text-center relative overflow-hidden group">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16 blur-2xl"></div>
-            <div className="text-xs font-bold text-white/60 uppercase tracking-widest mb-4">The Matrix Way</div>
-            <div className="space-y-2 mb-4 relative z-10">
-              <div className="bg-white/10 px-4 py-2 rounded-lg text-white font-bold text-lg">"Is this delicious?" <span className="text-xs font-normal opacity-70 ml-2">(Question)</span></div>
-              <div className="bg-white/10 px-4 py-2 rounded-lg text-white font-bold text-lg">"It wasn't delicious." <span className="text-xs font-normal opacity-70 ml-2">(Past)</span></div>
-            </div>
-            <p className="text-sm text-white/80">We give you <span className="font-bold text-white border-b border-white/40">10 real sentences</span> for every word.</p>
-          </div>
         </section>
         <div className="text-center pb-10 animate-in slide-in-from-bottom-4 duration-700 delay-500">
           <button onClick={() => setShowGuideMain(false)} className="w-full md:w-auto px-12 py-5 bg-[#3713ec] text-white text-lg font-bold rounded-2xl shadow-xl shadow-[#3713ec]/30 hover:scale-105 hover:bg-[#2a0eb5] transition-all flex items-center justify-center gap-3">
@@ -240,18 +239,14 @@ const App = () => {
         { title: "Chapter 3", lessons: mustKnowLessons.slice(40, 60) }, 
         { title: "Chapter 4", lessons: mustKnowLessons.slice(60, 81) }
       ];
-    } else {
-      courses['MUSTKNOW'].sections = [{ title: "업데이트 준비 중", lessons: [] }];
-    }
+    } else { courses['MUSTKNOW'].sections = [{ title: "업데이트 준비 중", lessons: [] }]; }
 
     if (dailyLessons.length > 0) {
       courses['DAILY'].sections = [
         { title: "Season 1", lessons: dailyLessons.slice(0, 30) }, 
         { title: "Season 2", lessons: dailyLessons.slice(30, 60) }
       ];
-    } else {
-      courses['DAILY'].sections = [{ title: "업데이트 준비 중", lessons: [] }];
-    }
+    } else { courses['DAILY'].sections = [{ title: "업데이트 준비 중", lessons: [] }]; }
 
     return courses;
   }, []);
@@ -260,11 +255,8 @@ const App = () => {
     const courseObj = groupedClassData[selectedCourse];
     if (courseObj && courseObj.sections.length > 0) {
       setOpenSection(courseObj.sections[0].title);
-      if (courseObj.sections[0].lessons.length > 0) {
-        setSelectedLesson(courseObj.sections[0].lessons[0]);
-      } else {
-        setSelectedLesson(null);
-      }
+      if (courseObj.sections[0].lessons.length > 0) setSelectedLesson(courseObj.sections[0].lessons[0]);
+      else setSelectedLesson(null);
     }
   }, [selectedCourse, groupedClassData]);
 
@@ -368,7 +360,6 @@ const App = () => {
                     <div className="flex-1 overflow-hidden">
                       <h3 className={`font-bold text-sm truncate ${isActive ? 'text-[#3713ec]' : 'text-slate-600'}`}>{chapter.title}</h3>
                       <div className="mt-2 w-full h-1.5 bg-slate-100 rounded-full overflow-hidden flex items-center"><div className="h-full bg-[#3713ec] transition-all duration-500" style={{ width: `${percentage}%` }}></div></div>
-                      <p className="text-[10px] text-slate-400 mt-1 text-right font-medium">{percentage}% Completed</p>
                     </div>
                   </div>
                 );
@@ -391,12 +382,11 @@ const App = () => {
 
         <div className="flex-1 overflow-y-auto custom-scrollbar relative">
           {appMode === 'class' ? (
-            /* ===== 강의실 본문 ===== */
             selectedLesson ? (
-              <div className="max-w-4xl mx-auto p-6 md:p-8 space-y-8 animate-in fade-in zoom-in-95 duration-300">
+              <div className="max-w-4xl mx-auto p-4 md:p-8 space-y-6 md:space-y-8 animate-in fade-in zoom-in-95 duration-300">
                 <header className="space-y-2">
-                  <h1 className="text-3xl md:text-4xl font-black tracking-tight text-slate-900 korean-text">{selectedLesson.title}</h1>
-                  <div className="flex gap-4 text-xs font-bold text-slate-400 uppercase">
+                  <h1 className="text-2xl md:text-4xl font-black tracking-tight text-slate-900 korean-text">{selectedLesson.title}</h1>
+                  <div className="flex gap-4 text-[10px] md:text-xs font-bold text-slate-400 uppercase">
                     <span className="flex items-center gap-1"><MonitorPlay size={14}/> {groupedClassData[selectedCourse].title}</span>
                   </div>
                 </header>
@@ -416,7 +406,7 @@ const App = () => {
                             </button>
                           ))}
                         </div>
-                        <div className="aspect-video bg-black rounded-[2rem] shadow-2xl relative border-4 border-slate-200 flex items-center justify-center">
+                        <div className="aspect-video bg-black rounded-2xl md:rounded-[2rem] shadow-xl relative border-4 border-slate-200 flex items-center justify-center">
                           {renderMedia(selectedLesson?.video_urls?.[videoTab])}
                         </div>
                       </section>
@@ -426,7 +416,7 @@ const App = () => {
                     if (!subVideoUrl) return null;
                     return (
                       <section className="space-y-4">
-                        <div className="aspect-video bg-black rounded-[2rem] shadow-2xl relative border-4 border-slate-200 flex items-center justify-center">
+                        <div className="aspect-video bg-black rounded-2xl md:rounded-[2rem] shadow-xl relative border-4 border-slate-200 flex items-center justify-center">
                           {renderMedia(subVideoUrl)}
                         </div>
                       </section>
@@ -434,72 +424,85 @@ const App = () => {
                   }
                 })()}
                 
-                {/* ★ 콘텐츠 구역: 메인강의=PDF / 서브강의=HTML 웹교재 분기 ★ */}
-                <section className="bg-white rounded-[2rem] border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+                <section className="bg-white rounded-2xl md:rounded-[2rem] border border-slate-200 shadow-sm overflow-hidden flex flex-col">
                   <div className="flex border-b border-slate-100">
-                    <button onClick={() => setContentTab('pdf')} className={`flex-1 py-4 text-xs font-black tracking-widest transition-all flex items-center justify-center gap-2 ${contentTab === 'pdf' ? 'text-[#3713ec] bg-blue-50/50' : 'text-slate-400 hover:bg-slate-50'}`}><FileText size={16}/> VISUAL TEXTBOOK</button>
-                    <button onClick={() => setContentTab('script')} className={`flex-1 py-4 text-xs font-black tracking-widest transition-all flex items-center justify-center gap-2 ${contentTab === 'script' ? 'text-[#3713ec] bg-blue-50/50' : 'text-slate-400 hover:bg-slate-50'}`}><Mic size={16}/> AUDIO SHADOWING</button>
+                    <button onClick={() => setContentTab('pdf')} className={`flex-1 py-3 md:py-4 text-[10px] md:text-xs font-black tracking-widest transition-all flex items-center justify-center gap-1 md:gap-2 ${contentTab === 'pdf' ? 'text-[#3713ec] bg-blue-50/50' : 'text-slate-400 hover:bg-slate-50'}`}><FileText size={16}/> TEXTBOOK</button>
+                    <button onClick={() => setContentTab('script')} className={`flex-1 py-3 md:py-4 text-[10px] md:text-xs font-black tracking-widest transition-all flex items-center justify-center gap-1 md:gap-2 ${contentTab === 'script' ? 'text-[#3713ec] bg-blue-50/50' : 'text-slate-400 hover:bg-slate-50'}`}><Mic size={16}/> SHADOWING</button>
                   </div>
                   
                   <div className="min-h-[500px] bg-slate-50/30">
                     {contentTab === 'pdf' ? (
                       selectedLesson.course === 'MAIN233' ? (
-                        /* 메인 강의: PDF 렌더링 */
+                        /* ★ 1. 메인 강의: 자체 PDF 엔진 렌더링 (모바일 완벽 대응) ★ */
                         selectedLesson.pdf_url ? (
-                          <div className="p-4 md:p-8">
-                            <iframe src={`${selectedLesson.pdf_url}#toolbar=0`} className="w-full h-[600px] md:h-[800px] rounded-xl border border-slate-200 shadow-sm bg-white" title="PDF Textbook" />
+                          <div className="bg-[#525659] p-4 flex flex-col items-center custom-scrollbar h-[600px] md:h-[800px] overflow-y-auto rounded-b-[2rem]">
+                            <Document 
+                              file={selectedLesson.pdf_url} 
+                              onLoadSuccess={({ numPages }) => setNumPages(numPages)}
+                              loading={<div className="text-white py-10">PDF 불러오는 중...</div>}
+                              error={<div className="text-white bg-red-500/20 p-4 rounded-xl text-center">PDF를 불러오지 못했습니다. <br/>(워드프레스 CORS 권한 설정이 필요합니다.)</div>}
+                            >
+                              {Array.from(new Array(numPages), (el, index) => (
+                                <Page 
+                                  key={`page_${index + 1}`} 
+                                  pageNumber={index + 1} 
+                                  renderTextLayer={false} 
+                                  renderAnnotationLayer={false}
+                                  width={isMobile ? windowWidth - 60 : 700} // 모바일 화면에 꽉 차게 자동 조절!
+                                  className="mb-4 shadow-xl"
+                                />
+                              ))}
+                            </Document>
                           </div>
                         ) : (
                           <div className="flex flex-col items-center justify-center h-[400px] text-slate-400">
                             <FileText size={48} className="mb-4 opacity-30"/>
-                            <p className="font-bold">이 강의는 PDF 교재가 없습니다.</p>
+                            <p className="font-bold text-sm">이 강의는 PDF 교재가 없습니다.</p>
                           </div>
                         )
                       ) : (
-                        /* 서브 강의: HTML 웹 교재 렌더링 */
+                        /* ★ 2. 서브 강의: 불필요한 패딩 싹 날려서 꽉 차게 보여주기 ★ */
                         selectedLesson.web_content ? (
-                          <div className="p-4 md:p-8">
+                          <div className="w-full h-auto bg-white">
                             <div 
-                              className="w-full h-[600px] md:h-[800px] rounded-xl border border-slate-200 shadow-sm bg-white overflow-y-auto p-6 md:p-10 text-left text-slate-800 leading-relaxed custom-scrollbar"
+                              className="w-full text-left text-slate-800 leading-relaxed overflow-x-hidden"
                               dangerouslySetInnerHTML={{ __html: selectedLesson.web_content }} 
                             />
                           </div>
                         ) : (
                           <div className="flex flex-col items-center justify-center h-[400px] text-slate-400">
                             <FileText size={48} className="mb-4 opacity-30"/>
-                            <p className="font-bold">웹 교재가 아직 등록되지 않았습니다.</p>
+                            <p className="font-bold text-sm">웹 교재가 아직 등록되지 않았습니다.</p>
                           </div>
                         )
                       )
                     ) : (
-                      /* ★ 1. 완벽한 오디오 재생 로직 (JSON에 적힌 이름 그대로!) ★ */
                       <div className="p-4 md:p-8 space-y-3">
                         {selectedLesson.script && selectedLesson.script.length > 0 ? (
                           selectedLesson.script.map((line, idx) => (
-                            <div key={idx} className="flex items-center gap-4 p-4 md:p-6 bg-white hover:bg-blue-50/50 border border-slate-100 hover:border-blue-200 rounded-2xl transition-all shadow-sm group">
+                            <div key={idx} className="flex items-center gap-3 md:gap-4 p-3 md:p-6 bg-white hover:bg-blue-50/50 border border-slate-100 hover:border-blue-200 rounded-2xl transition-all shadow-sm group">
                               <button 
                                 onClick={() => {
-                                  // JSON의 line.audio 값 (예: D_3599_05.mp3, K_3305_study_01.mp3) 그대로 가져와서 붙입니다!
                                   const audioUrl = `${CLASS_AUDIO_BASE_URL}/${line.audio}`;
                                   playAudio(audioUrl, 'class', `${selectedLesson.lesson_id}_${idx}`);
                                 }}
-                                className="w-12 h-12 shrink-0 rounded-full bg-slate-50 border border-slate-200 text-slate-400 flex items-center justify-center group-hover:bg-[#3713ec] group-hover:text-white group-hover:border-[#3713ec] transition-all shadow-sm"
+                                className="w-10 h-10 md:w-12 md:h-12 shrink-0 rounded-full bg-slate-50 border border-slate-200 text-slate-400 flex items-center justify-center group-hover:bg-[#3713ec] group-hover:text-white group-hover:border-[#3713ec] transition-all shadow-sm"
                               >
-                                <Volume2 size={20} />
+                                <Volume2 size={18} />
                               </button>
                               <div className="flex-1">
                                 <span className="text-[10px] font-bold text-[#3713ec] uppercase tracking-wider mb-1 block">
                                   {line.type || `Pattern ${idx + 1}`}
                                 </span>
-                                <p className="text-lg font-bold text-slate-800 korean-text leading-snug break-keep">{line.ko}</p>
-                                <p className="text-sm text-slate-500 mt-1 italic">{line.en}</p>
+                                <p className="text-base md:text-lg font-bold text-slate-800 korean-text leading-snug break-keep">{line.ko}</p>
+                                <p className="text-xs md:text-sm text-slate-500 mt-1 italic">{line.en}</p>
                               </div>
                             </div>
                           ))
                         ) : (
                           <div className="flex flex-col items-center justify-center h-[400px] text-slate-400">
                             <Mic size={48} className="mb-4 opacity-30"/>
-                            <p className="font-bold">오디오 스크립트가 아직 등록되지 않았습니다.</p>
+                            <p className="font-bold text-sm">오디오 스크립트가 아직 등록되지 않았습니다.</p>
                           </div>
                         )}
                       </div>
@@ -511,7 +514,6 @@ const App = () => {
               <div className="flex h-full items-center justify-center text-slate-400 font-bold">좌측에서 레슨을 선택해주세요.</div>
             )
           ) : (
-            /* ===== 단어장 본문 ===== */
             <div className="flex-1 flex flex-col h-full relative overflow-hidden">
               {showGuideMain ? (
                 <GuideBook />
@@ -523,15 +525,6 @@ const App = () => {
                       <h2 className="text-2xl md:text-3xl font-bold text-slate-900">{activeChapter?.title}</h2>
                     </div>
                   </header>
-                  <div className="mb-8 bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-4">
-                    <div className="flex-1">
-                      <div className="flex justify-between items-center mb-2">
-                        <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Chapter Progress</span>
-                        <span className="text-sm font-bold text-purple-600">{getChapterProgress(activeChapter)}%</span>
-                      </div>
-                      <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden"><div className="h-full bg-purple-600 transition-all duration-1000" style={{ width: `${getChapterProgress(activeChapter)}%` }}></div></div>
-                    </div>
-                  </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5 pb-10">
                     {activeChapter?.words.map((word, idx) => {
                       const isVisited = progress.visitedWords.includes(word.id);
@@ -549,9 +542,6 @@ const App = () => {
                 <div className="flex-1 flex flex-col overflow-hidden bg-[#f6f6f8] animate-in fade-in duration-300">
                   <header className="bg-white border-b border-slate-200 px-6 py-4 flex justify-between items-center shrink-0">
                     <button onClick={() => setActiveWord(null)} className="flex items-center gap-2 text-slate-500 font-bold text-sm hover:text-purple-600 transition-all"><ArrowLeft size={18} /> Back to List</button>
-                    <div className="flex items-center gap-4">
-                      <button onClick={toggleSpeed} className="flex items-center gap-1 bg-purple-600/10 px-3 py-1.5 rounded-full text-xs font-bold text-purple-600"><Gauge size={14} /> {playbackRate}x</button>
-                    </div>
                   </header>
                   <main className="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar">
                     <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
@@ -560,20 +550,15 @@ const App = () => {
                           <h2 className="text-5xl font-black text-slate-900 mb-2 korean-text">{activeWord.word}</h2>
                           <p className="text-xl text-slate-500 font-medium mb-6">{activeWord.meaning}</p>
                           <button onClick={() => playAudio(getAudioUrl(activeWord.id), 'word', activeWord.id)} className="w-12 h-12 bg-slate-50 rounded-full flex items-center justify-center text-slate-400 hover:bg-purple-600 hover:text-white transition-all shadow-inner"><Volume2 size={20} /></button>
-                          {activeWord.usage_note && <div className="mt-4 p-4 bg-purple-50/50 rounded-xl border border-purple-100/50 text-[11px] text-purple-800 leading-relaxed korean-text font-medium"><span className="font-bold underline">Note:</span> {activeWord.usage_note}</div>}
                         </div>
-                        <div className="bg-purple-600 rounded-3xl p-8 md:p-10 text-white shadow-xl shadow-purple-600/20 min-h-[300px] flex flex-col justify-center relative overflow-hidden group">
-                          <div className="relative z-10">
-                            <span className="text-white/50 text-[10px] font-bold uppercase tracking-widest block mb-4">Pattern {currentExIdx + 1}: {activeWord.examples[currentExIdx]?.type}</span>
-                            <h3 className="text-3xl md:text-4xl font-bold mb-4 korean-text break-keep leading-snug">{activeWord.examples[currentExIdx]?.ko}</h3>
-                            <p className="text-white/70 text-lg mb-10 font-medium italic">{activeWord.examples[currentExIdx]?.en}</p>
-                            <button onClick={() => playAudio(getAudioUrl(activeWord.id, currentExIdx), 'example', `${activeWord.id}_${currentExIdx}`)} className="w-16 h-16 bg-white text-purple-600 rounded-full flex items-center justify-center shadow-lg hover:scale-110 active:scale-95 transition-transform"><Volume2 size={32} className="fill-current" /></button>
-                          </div>
-                          <div className="absolute top-0 right-0 w-48 h-48 bg-white/10 rounded-full -mr-24 -mt-24 blur-3xl"></div>
+                        <div className="bg-purple-600 rounded-3xl p-8 md:p-10 text-white shadow-xl min-h-[300px] flex flex-col justify-center relative overflow-hidden">
+                          <span className="text-white/50 text-[10px] font-bold uppercase tracking-widest block mb-4">Pattern {currentExIdx + 1}: {activeWord.examples[currentExIdx]?.type}</span>
+                          <h3 className="text-3xl md:text-4xl font-bold mb-4 korean-text break-keep leading-snug">{activeWord.examples[currentExIdx]?.ko}</h3>
+                          <p className="text-white/70 text-lg mb-10 font-medium italic">{activeWord.examples[currentExIdx]?.en}</p>
+                          <button onClick={() => playAudio(getAudioUrl(activeWord.id, currentExIdx), 'example', `${activeWord.id}_${currentExIdx}`)} className="w-16 h-16 bg-white text-purple-600 rounded-full flex items-center justify-center shadow-lg hover:scale-110 active:scale-95 transition-transform"><Volume2 size={32} className="fill-current" /></button>
                         </div>
                       </div>
                       <div className="lg:col-span-7 bg-white rounded-3xl shadow-sm border border-slate-100 flex flex-col h-full lg:max-h-[650px] overflow-hidden">
-                        <div className="p-6 border-b border-slate-50 bg-slate-50/30 flex items-center gap-2 text-sm font-black text-slate-800 uppercase tracking-tight"><LayoutGrid size={18} className="text-purple-600" /> Variation Matrix</div>
                         <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
                           <div className="grid grid-cols-1 gap-3">
                             {activeWord.examples.map((ex, idx) => {
@@ -593,17 +578,12 @@ const App = () => {
                       </div>
                     </div>
                   </main>
-                  <footer className="bg-white border-t border-slate-100 p-4 flex justify-between items-center shrink-0">
-                    <button onClick={() => { const idx = activeChapter.words.findIndex(w => w.id === activeWord.id); if(idx > 0) handleWordSelect(activeChapter.words[idx-1]); }} className="flex items-center gap-2 px-6 py-3 rounded-xl font-bold text-slate-400 hover:bg-slate-50 transition-all"><ChevronLeft /> PREV</button>
-                    <button onClick={() => { const idx = activeChapter.words.findIndex(w => w.id === activeWord.id); if(idx < activeChapter.words.length - 1) handleWordSelect(activeChapter.words[idx+1]); }} className="flex items-center gap-2 px-8 py-3 bg-slate-900 text-white rounded-xl font-bold shadow-lg hover:scale-105 transition-all">NEXT WORD <ChevronRight /></button>
-                  </footer>
                 </div>
               )}
             </div>
           )}
         </div>
       </div>
-
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Lexend:wght@400;600;900&family=Noto+Sans+KR:wght@400;700;900&display=swap');
         body { font-family: 'Lexend', sans-serif; }
@@ -614,5 +594,4 @@ const App = () => {
     </div>
   );
 };
-
 export default App;
