@@ -7,6 +7,12 @@ import {
   CheckCircle2, Check, MonitorPlay, BookA, ChevronDown, FileText, Mic
 } from 'lucide-react';
 
+// ★ 정석 PDF 엔진 불러오기
+import { pdfjs, Document, Page } from 'react-pdf';
+import 'react-pdf/dist/Page/AnnotationLayer.css';
+import 'react-pdf/dist/Page/TextLayer.css';
+pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+
 import classData from './class_data.json';
 import vocaData from './voca_data.json';
 
@@ -15,82 +21,25 @@ const SALES_PAGE_URL = "https://talkori.com";
 const BUNNY_CDN_HOST = "https://talkori.b-cdn.net";
 const CDN_BASE_URL = `${BUNNY_CDN_HOST}/audio_tk`;
 const CLASS_AUDIO_BASE_URL = `${BUNNY_CDN_HOST}/audio_class`;
+// ★ 버니넷 PDF 폴더 주소 설정
+const PDF_CDN_BASE_URL = `${BUNNY_CDN_HOST}/pdf-re`; 
 const STORAGE_KEY = 'talkori_progress_v1';
 
 const App = () => {
   const [appMode, setAppMode] = useState('class'); 
   const isDemoMode = new URLSearchParams(window.location.search).get('demo') === 'true';
 
-  // ==========================================
-  // [마법의 스크립트 전역 주입 (퀴즈 & 만능 토글)]
-  // ==========================================
+  const [windowWidth, setWindowWidth] = useState(window.innerWidth);
   useEffect(() => {
-    // 1. 퀴즈 피드백 작동 로직
-    window.handleChoice = function(element, isCorrect, feedbackId) {
-      const parentContainer = element.closest('.flex-col');
-      if (!parentContainer) return;
-      const options = parentContainer.querySelectorAll('.quiz-option');
-      const feedbackArea = document.getElementById(feedbackId);
-      const resultText = document.getElementById('feedback-result');
-
-      options.forEach(opt => {
-        opt.style.borderColor = "#fff";
-        opt.style.backgroundColor = "#fff";
-        opt.style.color = "#334155";
-      });
-
-      if (isCorrect) {
-        element.style.borderColor = "#22c55e";
-        element.style.backgroundColor = "#f0fdf4";
-        element.style.color = "#15803d";
-        if (resultText) {
-          resultText.innerText = "✅ Correct!";
-          resultText.style.color = "#22c55e";
-        }
-      } else {
-        element.style.borderColor = "#ef4444";
-        element.style.backgroundColor = "#fef2f2";
-        element.style.color = "#b91c1c";
-        if (resultText) {
-          resultText.innerText = "❌ Try Again!";
-          resultText.style.color = "#ef4444";
-        }
-      }
-      if (feedbackArea) feedbackArea.classList.remove('hidden');
-    };
-
-    // 2. 만능 토글 로직 (toggleDesire, toggleVerb 등 이름 상관없이 통합 처리)
-    const handleToggle = (id) => {
-      const switchEl = document.getElementById('switch-' + id);
-      const korText = document.getElementById('kor-' + id);
-      const engText = document.getElementById('eng-' + id);
-      if (!switchEl || !korText) return;
-      
-      const isChecked = switchEl.checked;
-      const opt1 = korText.getAttribute('data-base') || korText.getAttribute('data-opt1');
-      const opt2 = korText.getAttribute('data-transformed') || korText.getAttribute('data-opt2');
-      korText.innerText = isChecked ? opt2 : opt1;
-      korText.style.color = isChecked ? '#526ae5' : '#1e293b';
-      
-      if (engText) {
-        const eng1 = engText.getAttribute('data-eng1');
-        const eng2 = engText.getAttribute('data-eng2');
-        if (eng1 && eng2) engText.innerText = isChecked ? eng2 : eng1;
-      }
-    };
-    
-    // HTML에 적힌 함수 이름들에 만능 로직을 연결
-    window.toggleDesire = handleToggle;
-    window.toggleVerb = handleToggle;
-
-    // 3. 플립 카드 강제 연결 (클릭 시 뒤집기)
-    const handleGlobalClick = (e) => {
-      const flipCard = e.target.closest('.flip-card');
-      if (flipCard) flipCard.classList.toggle('flipped');
-    };
-    document.addEventListener('click', handleGlobalClick);
-    return () => document.removeEventListener('click', handleGlobalClick);
+    const handleResize = () => setWindowWidth(window.innerWidth);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
   }, []);
+  const isMobile = windowWidth <= 768;
+  const [numPages, setNumPages] = useState(null);
+
+  // 웹 교재(HTML) 영역 참조
+  const webContentRef = useRef(null);
 
   // ==========================================
   // [단어장 상태 및 로직] 
@@ -207,6 +156,89 @@ const App = () => {
     setContentTab('pdf');
   }, [selectedLesson]);
 
+  // ★ 1. PDF 주소 자동 변환 로직 (워드프레스 주소 -> 버니넷 주소) ★
+  const getConvertedPdfUrl = (url) => {
+    if (!url) return null;
+    const fileName = url.split('/').pop(); // 예: chl5-22-p.pdf 추출
+    return `${PDF_CDN_BASE_URL}/${fileName}`; // 버니넷 주소로 조립
+  };
+
+  // ★ 2. 완벽한 이벤트 감지(Event Delegation) 로직 ★
+  useEffect(() => {
+    if (appMode !== 'class' || contentTab !== 'pdf' || !webContentRef.current) return;
+    const container = webContentRef.current;
+
+    const handleWebClick = (e) => {
+      // 1) 플립카드 뒤집기 감지
+      const flipCard = e.target.closest('.flip-card');
+      if (flipCard) flipCard.classList.toggle('flipped');
+
+      // 2) 퀴즈 옵션 버튼 감지
+      const quizOption = e.target.closest('.quiz-option');
+      if (quizOption) {
+        const onclickAttr = quizOption.getAttribute('onclick') || '';
+        const isCorrect = onclickAttr.includes('true'); 
+        const feedbackMatch = onclickAttr.match(/'([^']+)'/);
+        const feedbackId = feedbackMatch ? feedbackMatch[1] : 'feedback-nuance';
+
+        const parent = quizOption.closest('.flex-col');
+        if (parent) {
+          parent.querySelectorAll('.quiz-option').forEach(o => {
+            o.style.borderColor = "#fff"; o.style.backgroundColor = "#fff"; o.style.color = "#334155";
+          });
+        }
+
+        const resultText = document.getElementById('feedback-result');
+        if (isCorrect) {
+          quizOption.style.borderColor = "#22c55e"; quizOption.style.backgroundColor = "#f0fdf4"; quizOption.style.color = "#15803d";
+          if (resultText) { resultText.innerText = "✅ Correct!"; resultText.style.color = "#22c55e"; }
+        } else {
+          quizOption.style.borderColor = "#ef4444"; quizOption.style.backgroundColor = "#fef2f2"; quizOption.style.color = "#b91c1c";
+          if (resultText) { resultText.innerText = "❌ Try Again!"; resultText.style.color = "#ef4444"; }
+        }
+        
+        const feedbackArea = document.getElementById(feedbackId);
+        if (feedbackArea) feedbackArea.classList.remove('hidden');
+      }
+    };
+
+    const handleWebChange = (e) => {
+      // 3) 토글 스위치 감지 (정규식으로 숫자 id 추출하여 만능 연결)
+      if (e.target.matches('.tk-switch input[type="checkbox"]')) {
+        const sw = e.target;
+        const idMatch = sw.id.match(/\d+/);
+        if (!idMatch) return;
+        const id = idMatch[0];
+        
+        const korText = document.getElementById('kor-' + id);
+        const engText = document.getElementById('eng-' + id);
+        
+        if (korText) {
+          const isChecked = sw.checked;
+          const opt1 = korText.getAttribute('data-base') || korText.getAttribute('data-opt1');
+          const opt2 = korText.getAttribute('data-transformed') || korText.getAttribute('data-opt2');
+          if (opt1 && opt2) {
+            korText.innerText = isChecked ? opt2 : opt1;
+            korText.style.color = isChecked ? '#526ae5' : '#1e293b';
+          }
+        }
+        if (engText) {
+          const eng1 = engText.getAttribute('data-eng1');
+          const eng2 = engText.getAttribute('data-eng2');
+          if (eng1 && eng2) engText.innerText = sw.checked ? eng2 : eng1;
+        }
+      }
+    };
+
+    container.addEventListener('click', handleWebClick);
+    container.addEventListener('change', handleWebChange);
+
+    return () => {
+      container.removeEventListener('click', handleWebClick);
+      container.removeEventListener('change', handleWebChange);
+    };
+  }, [selectedLesson, contentTab, appMode]);
+
   const renderMedia = (url) => {
     if (!url) return <div className="text-white/50 font-bold flex flex-col items-center gap-2"><MonitorPlay size={40} className="opacity-50"/>영상/음원이 아직 준비되지 않았습니다.</div>;
     if (url.includes('youtu.be') || url.includes('youtube.com')) {
@@ -293,7 +325,7 @@ const App = () => {
         </div>
       </div>
 
-      {/* 메인 화면 영역 */}
+      {/* 2. 메인 화면 영역 */}
       <div className="flex-1 flex flex-col h-full relative overflow-hidden bg-slate-50">
         <nav className="h-16 bg-white border-b border-slate-200 flex items-center justify-between md:justify-center px-6 shrink-0 shadow-sm z-10 relative">
           <button onClick={() => setIsSidebarOpen(true)} className="md:hidden p-2 text-slate-500"><Menu size={24}/></button>
@@ -343,19 +375,23 @@ const App = () => {
                     {contentTab === 'pdf' ? (
                       selectedLesson.course === 'MAIN233' ? (
                         selectedLesson.pdf_url ? (
-                          /* ★ [PDF 초강력 해결책] 구글 문서 뷰어로 우회하여 앱 안에서 모바일 스크롤 완벽 지원! (CORS 무시) ★ */
-                          <div className="w-full h-[600px] md:h-[800px] bg-slate-100 overflow-hidden relative">
-                            <div className="absolute inset-0 flex items-center justify-center text-slate-400 font-bold z-0 animate-pulse">PDF 문서를 불러오는 중입니다...</div>
-                            <iframe 
-                              src={`https://docs.google.com/gview?url=${encodeURIComponent(selectedLesson.pdf_url)}&embedded=true`} 
-                              className="w-full h-full border-none relative z-10" 
-                              title="PDF Textbook" 
-                            />
+                          /* ★ 정석 PDF 렌더러 복구 & 버니넷 주소 자동변환 적용 ★ */
+                          <div className="bg-[#525659] p-2 md:p-4 flex flex-col items-center custom-scrollbar h-[600px] md:h-[800px] overflow-y-auto rounded-b-[2rem]">
+                            <Document 
+                              file={getConvertedPdfUrl(selectedLesson.pdf_url)} 
+                              onLoadSuccess={({ numPages }) => setNumPages(numPages)}
+                              loading={<div className="text-white py-10 font-bold animate-pulse">PDF 불러오는 중...</div>}
+                            >
+                              {Array.from(new Array(numPages), (el, index) => (
+                                <Page key={`page_${index + 1}`} pageNumber={index + 1} renderTextLayer={false} renderAnnotationLayer={false} width={isMobile ? windowWidth - 40 : 700} className="mb-4 shadow-xl" />
+                              ))}
+                            </Document>
                           </div>
                         ) : (<div className="flex flex-col items-center justify-center h-[400px] text-slate-400"><FileText size={48} className="mb-4 opacity-30"/><p className="font-bold text-sm">이 강의는 PDF 교재가 없습니다.</p></div>)
                       ) : (
                         selectedLesson.web_content ? (
-                          <div className="w-full h-auto bg-white p-0">
+                          /* ★ 웹교재 렌더링 & 이벤트 위임 타겟 연결 ★ */
+                          <div className="w-full h-auto bg-white p-0" ref={webContentRef}>
                             <div className="w-full text-left text-slate-800 leading-relaxed overflow-x-hidden" dangerouslySetInnerHTML={{ __html: selectedLesson.web_content }} />
                           </div>
                         ) : (<div className="flex flex-col items-center justify-center h-[400px] text-slate-400"><FileText size={48} className="mb-4 opacity-30"/><p className="font-bold text-sm">웹 교재가 아직 등록되지 않았습니다.</p></div>)
@@ -421,6 +457,10 @@ const App = () => {
                       </div>
                     </div>
                   </main>
+                  <footer className="bg-white border-t border-slate-100 p-4 flex justify-between items-center shrink-0">
+                    <button onClick={() => { const idx = activeChapter.words.findIndex(w => w.id === activeWord.id); if(idx > 0) handleWordSelect(activeChapter.words[idx-1]); }} className="flex items-center gap-2 px-6 py-3 rounded-xl font-bold text-slate-400 hover:bg-slate-50 transition-all"><ChevronLeft /> PREV</button>
+                    <button onClick={() => { const idx = activeChapter.words.findIndex(w => w.id === activeWord.id); if(idx < activeChapter.words.length - 1) handleWordSelect(activeChapter.words[idx+1]); }} className="flex items-center gap-2 px-8 py-3 bg-slate-900 text-white rounded-xl font-bold shadow-lg hover:scale-105 transition-all">NEXT WORD <ChevronRight /></button>
+                  </footer>
                 </div>
               )}
             </div>
@@ -428,14 +468,18 @@ const App = () => {
         </div>
       </div>
       
-      {/* ★ 아이콘 깨짐 방지 철벽 방어막 추가 ★ */}
+      {/* ★ 3. 아이콘 텍스트 깨짐 철벽 방어 (대문자 무력화) ★ */}
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Lexend:wght@400;600;900&family=Noto+Sans+KR:wght@400;700;900&display=swap');
         body { font-family: 'Lexend', sans-serif; }
         .korean-text { font-family: 'Noto Sans KR', sans-serif; }
         .custom-scrollbar::-webkit-scrollbar { width: 6px; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
-        .material-symbols-outlined { text-transform: none !important; } 
+        .material-symbols-outlined { 
+          text-transform: none !important; 
+          font-family: 'Material Symbols Outlined' !important;
+          letter-spacing: normal !important;
+        } 
       `}</style>
     </div>
   );
