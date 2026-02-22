@@ -35,8 +35,9 @@ const App = () => {
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
-  const isMobile = windowWidth <= 768;
+const isMobile = windowWidth <= 768;
   const [numPages, setNumPages] = useState(null);
+  const [visiblePages, setVisiblePages] = useState(3); // ★ 이 줄을 추가하세요!
 
   // 웹 교재(HTML) 영역 참조
   const webContentRef = useRef(null);
@@ -385,15 +386,39 @@ const App = () => {
                     {contentTab === 'pdf' ? (
                       selectedLesson.course === 'MAIN233' ? (
                         selectedLesson.pdf_url ? (
-                          /* ★ 정석 PDF 렌더러 복구 & 버니넷 주소 자동변환 적용 ★ */
-                          <div className="bg-[#525659] p-2 md:p-4 flex flex-col items-center custom-scrollbar h-[600px] md:h-[800px] overflow-y-auto rounded-b-[2rem]">
+/* ★ 3. Issue 3 해결: 모바일 최적화 웹툰형 지연 로딩 (Lazy Loading) ★ */
+                          <div 
+                            className="bg-[#333333] flex flex-col items-center custom-scrollbar h-[600px] md:h-[800px] overflow-y-auto rounded-b-[2rem] w-full relative"
+                            onScroll={(e) => {
+                              const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
+                              // 스크롤이 맨 밑에서 1000px 정도 남았을 때 다음 2페이지를 미리 불러옵니다.
+                              if (scrollTop + clientHeight >= scrollHeight - 1000) {
+                                if (numPages && visiblePages < numPages) {
+                                  setVisiblePages(prev => prev + 2); 
+                                }
+                              }
+                            }}
+                          >
                             <Document 
                               file={getConvertedPdfUrl(selectedLesson.pdf_url)} 
-                              onLoadSuccess={({ numPages }) => setNumPages(numPages)}
-                              loading={<div className="text-white py-10 font-bold animate-pulse">PDF 불러오는 중...</div>}
+                              onLoadSuccess={({ numPages }) => {
+                                setNumPages(numPages);
+                                setVisiblePages(3); // 강의가 바뀌면 다시 3페이지부터 렌더링
+                              }}
+                              loading={<div className="text-white py-20 font-bold animate-pulse text-sm">웹툰형 교재를 불러오는 중입니다...</div>}
+                              error={<div className="text-red-400 py-20 font-bold flex flex-col items-center gap-2"><MonitorPlay size={32}/>PDF를 불러올 수 없습니다. (CORS 에러 확인)</div>}
                             >
-                              {Array.from(new Array(numPages), (el, index) => (
-                                <Page key={`page_${index + 1}`} pageNumber={index + 1} renderTextLayer={false} renderAnnotationLayer={false} width={isMobile ? windowWidth - 40 : 700} className="mb-4 shadow-xl" />
+                              {Array.from(new Array(Math.min(numPages || 0, visiblePages)), (el, index) => (
+                                <div key={`page_wrapper_${index}`} className="mb-1 md:mb-4 shadow-2xl">
+                                  <Page 
+                                    pageNumber={index + 1} 
+                                    renderTextLayer={false} 
+                                    renderAnnotationLayer={false} 
+                                    // 모바일(웹툰형)은 화면 꽉 차게, PC는 보기 좋은 너비로 고정
+                                    width={isMobile ? windowWidth : 700} 
+                                    loading={<div className="w-full h-[500px] bg-white/5 animate-pulse flex items-center justify-center text-white/30 text-xs">페이지 로딩 중...</div>}
+                                  />
+                                </div>
                               ))}
                             </Document>
                           </div>
