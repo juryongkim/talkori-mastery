@@ -343,7 +343,7 @@ const App = () => {
     'DAILY': { shorts: 'EPISODE', logic: 'REVIEW' }     
   };
 
-  const [selectedCourse, setSelectedCourse] = useState('MAIN233');
+
   // ==========================================
   // [강의실 상태 및 로직] 
   // ==========================================
