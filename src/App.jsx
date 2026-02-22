@@ -24,6 +24,12 @@ const CLASS_AUDIO_BASE_URL = `${BUNNY_CDN_HOST}/audio_class`;
 // ★ 버니넷 PDF 폴더 주소 설정
 const PDF_CDN_BASE_URL = `${BUNNY_CDN_HOST}/pdf-re`; 
 const STORAGE_KEY = 'talkori_progress_v1';
+// ★ Issue 3 해결: 무한 렌더링(마우스 오버 크래시) 방지용 안전 옵션
+const pdfOptions = {
+  cMapUrl: `https://unpkg.com/pdfjs-dist@${pdfjs.version}/cmaps/`,
+  cMapPacked: true,
+  standardFontDataUrl: `https://unpkg.com/pdfjs-dist@${pdfjs.version}/standard_fonts/`,
+};
 
 const App = () => {
   const [appMode, setAppMode] = useState('class'); 
@@ -157,11 +163,11 @@ const isMobile = windowWidth <= 768;
     setContentTab('pdf');
   }, [selectedLesson]);
 
-  // ★ 1. PDF 주소 자동 변환 로직 (워드프레스 주소 -> 버니넷 주소) ★
+// ★ 1. PDF 주소 자동 변환 로직 (특수문자/띄어쓰기 에러 방어) ★
   const getConvertedPdfUrl = (url) => {
     if (!url) return null;
-    const fileName = url.split('/').pop(); // 예: chl5-22-p.pdf 추출
-    return `${PDF_CDN_BASE_URL}/${fileName}`; // 버니넷 주소로 조립
+    const fileName = url.split('/').pop(); 
+    return `${PDF_CDN_BASE_URL}/${encodeURIComponent(fileName)}`; 
   };
 
 // ★ 1. 완벽 해결: 퀴즈 전역 함수 유지 + 토글 예외사항(1, 5강) 스마트 감지 ★
@@ -386,12 +392,11 @@ const isMobile = windowWidth <= 768;
                     {contentTab === 'pdf' ? (
                       selectedLesson.course === 'MAIN233' ? (
                         selectedLesson.pdf_url ? (
-/* ★ 3. Issue 3 해결: 모바일 최적화 웹툰형 지연 로딩 (Lazy Loading) ★ */
+/* ★ 3. Issue 3 해결: 웹툰형 지연 로딩 + 주소 확인 진단기 + 캔버스 확보 ★ */
                           <div 
                             className="bg-[#333333] flex flex-col items-center custom-scrollbar h-[600px] md:h-[800px] overflow-y-auto rounded-b-[2rem] w-full relative"
                             onScroll={(e) => {
                               const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
-                              // 스크롤이 맨 밑에서 1000px 정도 남았을 때 다음 2페이지를 미리 불러옵니다.
                               if (scrollTop + clientHeight >= scrollHeight - 1000) {
                                 if (numPages && visiblePages < numPages) {
                                   setVisiblePages(prev => prev + 2); 
@@ -401,27 +406,41 @@ const isMobile = windowWidth <= 768;
                           >
                             <Document 
                               file={getConvertedPdfUrl(selectedLesson.pdf_url)} 
+                              options={pdfOptions} /* 바깥으로 빼둔 안전한 옵션 연결 */
                               onLoadSuccess={({ numPages }) => {
                                 setNumPages(numPages);
-                                setVisiblePages(3); // 강의가 바뀌면 다시 3페이지부터 렌더링
+                                setVisiblePages(3);
                               }}
-                              loading={<div className="text-white py-20 font-bold animate-pulse text-sm">웹툰형 교재를 불러오는 중입니다...</div>}
-                              error={<div className="text-red-400 py-20 font-bold flex flex-col items-center gap-2">PDF를 불러올 수 없습니다.</div>}
-                              /* ★ 한국어(CJK) 텍스트 렌더링을 위한 필수 옵션 (이게 없으면 글씨가 투명해짐) ★ */
-                              options={{
-                                cMapUrl: `https://unpkg.com/pdfjs-dist@${pdfjs.version}/cmaps/`,
-                                cMapPacked: true,
-                              }}
+                              loading={
+                                <div className="text-white py-20 font-bold flex flex-col items-center gap-4 text-center">
+                                  <div className="animate-pulse text-sm">교재를 안전하게 불러오는 중입니다...</div>
+                                  <div className="text-[10px] text-white/50 bg-black/50 p-3 rounded-xl break-all w-5/6">
+                                    [접속 시도 중인 버니넷 주소]<br/>{getConvertedPdfUrl(selectedLesson.pdf_url)}
+                                  </div>
+                                </div>
+                              }
+                              error={
+                                <div className="text-red-400 py-20 font-bold flex flex-col items-center gap-4 text-center">
+                                  <MonitorPlay size={32}/>
+                                  <p>PDF를 불러올 수 없습니다.</p>
+                                  <div className="text-[10px] text-white/80 bg-black/50 p-4 rounded-xl break-all w-5/6 select-all">
+                                    [에러가 난 실제 주소 (클릭해보세요)]<br/>
+                                    <a href={getConvertedPdfUrl(selectedLesson.pdf_url)} target="_blank" rel="noreferrer" className="text-blue-400 underline mt-2 inline-block">
+                                      {getConvertedPdfUrl(selectedLesson.pdf_url)}
+                                    </a>
+                                  </div>
+                                </div>
+                              }
                             >
                               {Array.from(new Array(Math.min(numPages || 0, visiblePages)), (el, index) => (
-                                <div key={`page_wrapper_${index}`} className="mb-1 md:mb-4 shadow-2xl">
+                                /* bg-white와 min-h를 줘서 이미지 캔버스가 그려질 도화지를 강제로 확보합니다 */
+                                <div key={`page_wrapper_${index}`} className="mb-1 md:mb-4 shadow-2xl bg-white min-h-[500px] w-full flex justify-center">
                                   <Page 
                                     pageNumber={index + 1} 
                                     renderTextLayer={false} 
                                     renderAnnotationLayer={false} 
-                                    // 모바일(웹툰형)은 화면 꽉 차게, PC는 보기 좋은 너비로 고정
                                     width={isMobile ? windowWidth : 700} 
-                                    loading={<div className="w-full h-[500px] bg-white/5 animate-pulse flex items-center justify-center text-white/30 text-xs">페이지 로딩 중...</div>}
+                                    loading={<div className="w-full h-[500px] bg-slate-100 animate-pulse flex items-center justify-center text-slate-400 text-xs">페이지 이미지 렌더링 중...</div>}
                                   />
                                 </div>
                               ))}
