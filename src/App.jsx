@@ -367,15 +367,17 @@ const App = () => {
                     {contentTab === 'pdf' ? (
                       selectedLesson.course === 'MAIN233' ? (
                         selectedLesson.pdf_url ? (
-                          /* ★ Plan B 적용: 무거운 react-pdf 대신 빠르고 안전한 iframe 방식 도입 ★ */
+/* ★ Plan C: 구글 뷰어 제거 + 초고속 독립형 전용 뷰어 탑재 ★ */
                           <div className="w-full h-[600px] md:h-[800px] bg-[#525659] rounded-b-2xl md:rounded-b-[2rem] overflow-hidden relative">
                             {isMobile ? (
+                              /* 모바일: 우리가 방금 넣은 전용 뷰어를 호출해서 띄웁니다! */
                               <iframe 
-                                src={`https://docs.google.com/viewer?url=${encodeURIComponent(selectedLesson.pdf_url)}&embedded=true`}
+                                src={`/pdfjs/web/viewer.html?file=${encodeURIComponent(selectedLesson.pdf_url)}`}
                                 className="w-full h-full border-0"
                                 title="Talkori Textbook Mobile"
                               />
                             ) : (
+                              /* PC: 크롬 네이티브 뷰어 유지 (가장 빠름) */
                               <iframe 
                                 src={`${selectedLesson.pdf_url}#toolbar=0&navpanes=0&view=FitH`}
                                 className="w-full h-full border-0"
