@@ -406,7 +406,12 @@ const isMobile = windowWidth <= 768;
                                 setVisiblePages(3); // 강의가 바뀌면 다시 3페이지부터 렌더링
                               }}
                               loading={<div className="text-white py-20 font-bold animate-pulse text-sm">웹툰형 교재를 불러오는 중입니다...</div>}
-                              error={<div className="text-red-400 py-20 font-bold flex flex-col items-center gap-2"><MonitorPlay size={32}/>PDF를 불러올 수 없습니다. (CORS 에러 확인)</div>}
+                              error={<div className="text-red-400 py-20 font-bold flex flex-col items-center gap-2">PDF를 불러올 수 없습니다.</div>}
+                              /* ★ 한국어(CJK) 텍스트 렌더링을 위한 필수 옵션 (이게 없으면 글씨가 투명해짐) ★ */
+                              options={{
+                                cMapUrl: `https://unpkg.com/pdfjs-dist@${pdfjs.version}/cmaps/`,
+                                cMapPacked: true,
+                              }}
                             >
                               {Array.from(new Array(Math.min(numPages || 0, visiblePages)), (el, index) => (
                                 <div key={`page_wrapper_${index}`} className="mb-1 md:mb-4 shadow-2xl">
