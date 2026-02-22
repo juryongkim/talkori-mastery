@@ -336,6 +336,14 @@ const App = () => {
     );
   };
 
+  // ★ 1. 코스별 비디오 탭 설정표 (엑셀의 shorts/logic 칸을 그대로 쓰되, 화면에 보이는 이름만 바꿈)
+  const COURSE_VIDEO_TABS = {
+    'MAIN233': { shorts: 'SHORTS', logic: 'LOGIC', commentary: 'COMMENTARY' },
+    'MUSTKNOW': { shorts: 'CONCEPT', logic: 'PRACTICE' }, 
+    'DAILY': { shorts: 'EPISODE', logic: 'REVIEW' }     
+  };
+
+  const [selectedCourse, setSelectedCourse] = useState('MAIN233');
   // ==========================================
   // [강의실 상태 및 로직] 
   // ==========================================
@@ -366,10 +374,15 @@ const App = () => {
     }
   }, [selectedCourse, groupedClassData]);
 
+// ★ 2. 코스에 맞춰 탭을 자동으로 찾아주는 기능
   useEffect(() => {
-    if (selectedLesson?.course === 'MAIN233') {
-      const availableTabs = ['shorts', 'logic', 'commentary'].filter(t => selectedLesson.video_urls?.[t]);
-      if (availableTabs.length > 0 && !availableTabs.includes(videoTab)) setVideoTab(availableTabs.includes('logic') ? 'logic' : availableTabs[0]);
+    if (selectedLesson) {
+      const courseTabs = COURSE_VIDEO_TABS[selectedLesson.course] || {};
+      const availableKeys = Object.keys(courseTabs).filter(k => selectedLesson.video_urls?.[k]);
+      
+      if (availableKeys.length > 0 && !availableKeys.includes(videoTab)) {
+        setVideoTab(availableKeys.includes('logic') ? 'logic' : availableKeys[0]);
+      }
     }
     setContentTab('pdf');
   }, [selectedLesson]);
@@ -595,33 +608,39 @@ const App = () => {
                   <div className="flex gap-4 text-[10px] md:text-xs font-bold text-slate-400 uppercase"><span className="flex items-center gap-1"><MonitorPlay size={14}/> {groupedClassData[selectedCourse].title}</span></div>
                 </header>
 
-{/* ★ 수술 3: 리모컨이 들어갈 수 있도록 액자 사이즈 조절 ★ */}
+{/* ★ 3. 탭 UI를 설정표(사전)에 맞춰 자동으로 그리기 */}
                 {(() => {
-                  const isMainCourse = selectedLesson.course === 'MAIN233';
-                  if (isMainCourse) {
-                    const availableTabs = ['shorts', 'logic', 'commentary'].filter(t => selectedLesson.video_urls?.[t]);
-                    if (availableTabs.length === 0) return null;
-                    return (
-                      <section className="w-full">
-                        <div className="flex gap-2 overflow-x-auto px-5 md:px-0 pb-3 md:pb-3 custom-scrollbar">
-                          {availableTabs.map(t => (<button key={t} onClick={() => setVideoTab(t)} className={`px-6 py-2 rounded-full shrink-0 text-[10px] font-black uppercase transition-all ${videoTab === t ? 'bg-[#3713ec] text-white shadow-lg' : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-100'}`}>{t} Video</button>))}
-                        </div>
-                        <div className="w-full bg-black md:rounded-[2rem] md:shadow-xl relative md:border-4 border-slate-200 flex flex-col items-center justify-center overflow-hidden">
-                          {renderMedia(selectedLesson?.video_urls?.[videoTab])}
-                        </div>
-                      </section>
-                    );
-                  } else {
-                    const subVideoUrl = selectedLesson?.video_urls?.video || selectedLesson?.video_urls?.shorts;
-                    if (!subVideoUrl) return null;
+                  const courseTabs = COURSE_VIDEO_TABS[selectedLesson.course] || {};
+                  const availableTabs = Object.keys(courseTabs).filter(k => selectedLesson.video_urls?.[k]);
+                  
+                  // 영상이 하나도 없으면 아무것도 안 그림 (기존 안전장치 유지)
+                  if (availableTabs.length === 0) {
+                    const fallbackUrl = selectedLesson?.video_urls?.video || selectedLesson?.video_urls?.shorts;
+                    if (!fallbackUrl) return null; 
                     return (
                       <section className="w-full mt-4 md:mt-0">
                         <div className="w-full bg-black md:rounded-[2rem] md:shadow-xl relative md:border-4 border-slate-200 flex flex-col items-center justify-center overflow-hidden">
-                          {renderMedia(subVideoUrl)}
+                          {renderMedia(fallbackUrl)}
                         </div>
                       </section>
                     );
                   }
+
+                  // 코스에 맞는 탭 버튼들을 예쁘게 그려줌
+                  return (
+                    <section className="w-full">
+                      <div className="flex gap-2 overflow-x-auto px-5 md:px-0 pb-3 md:pb-3 custom-scrollbar">
+                        {availableTabs.map(key => (
+                          <button key={key} onClick={() => setVideoTab(key)} className={`px-6 py-2 rounded-full shrink-0 text-[10px] font-black uppercase transition-all ${videoTab === key ? 'bg-[#3713ec] text-white shadow-lg' : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-100'}`}>
+                            {courseTabs[key]} VIDEO
+                          </button>
+                        ))}
+                      </div>
+                      <div className="w-full bg-black md:rounded-[2rem] md:shadow-xl relative md:border-4 border-slate-200 flex flex-col items-center justify-center overflow-hidden">
+                        {renderMedia(selectedLesson?.video_urls?.[videoTab])}
+                      </div>
+                    </section>
+                  );
                 })()}
                 
                 {/* ★ 교재 영역: 모바일에서는 테두리 제거 및 화면에 꽉 차게 렌더링 */}
