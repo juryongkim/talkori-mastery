@@ -637,19 +637,7 @@ const App = () => {
                         selectedLesson.pdf_url ? (
                           /* ★ 독립형 뷰어 연결 (버니넷 우회) ★ */
                           <div className="w-full h-[600px] md:h-[800px] bg-[#525659] md:rounded-b-[2rem] overflow-hidden relative">
-                            {isMobile ? (
-                              <iframe 
-                                src={`/pdfjs/web/viewer.html?file=${encodeURIComponent(getBunnyPdfUrl(selectedLesson.pdf_url))}`}
-                                className="w-full h-full border-0"
-                                title="Talkori Textbook Mobile"
-                              />
-                            ) : (
-                              <iframe 
-                                src={`${selectedLesson.pdf_url}#toolbar=0&navpanes=0&view=FitH`}
-                                className="w-full h-full border-0"
-                                title="Talkori Textbook PC"
-                              />
-                            )}
+<iframe src={`${selectedLesson.pdf_url}#toolbar=0&navpanes=0&view=FitH`} className="w-full h-full border-0" title="Talkori Textbook" />
                           </div>
                         ) : (<div className="flex flex-col items-center justify-center h-[400px] text-slate-400"><FileText size={48} className="mb-4 opacity-30"/><p className="font-bold text-sm">이 강의는 PDF 교재가 없습니다.</p></div>)
                       ) : (
