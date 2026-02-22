@@ -18,14 +18,14 @@ const CLASS_AUDIO_BASE_URL = `${BUNNY_CDN_HOST}/audio_class`;
 const PDF_CDN_BASE_URL = `${BUNNY_CDN_HOST}/pdf-re`; 
 const STORAGE_KEY = 'talkori_progress_v1';
 
-// ==========================================
-// ★ 완벽 수리된 스마트 유튜브 플레이어 (A-B 반복 버그 해결) ★
-// ==========================================
+// ★ 수술 1: 스마트 유튜브 플레이어 부품 (A-B 반복 버그 완벽 수정) ★
 const YouTubePlayer = ({ videoId }) => {
   const playerRef = useRef(null);
   const ytPlayerRef = useRef(null);
+  
+  // 변경: 타이머가 갇히지 않도록 최신 값을 보관하는 '비밀 창고(Ref)' 사용
   const loopData = useRef({ a: null, b: null }); 
-  const [uiState, setUiState] = useState(0); 
+  const [uiState, setUiState] = useState(0); // 0: 기본, 1: A지점, 2: A-B반복중
   const loopIntervalRef = useRef(null);
 
   useEffect(() => {
@@ -65,6 +65,7 @@ const YouTubePlayer = ({ videoId }) => {
   const startLoopCheck = () => {
     stopLoopCheck();
     loopIntervalRef.current = setInterval(() => {
+      // 이제 타이머가 옛날 값에 갇히지 않고 항상 최신 a, b 값을 꺼내봅니다!
       if (ytPlayerRef.current && ytPlayerRef.current.getCurrentTime) {
         const { a, b } = loopData.current;
         if (a !== null && b !== null && ytPlayerRef.current.getCurrentTime() >= b) {
@@ -86,20 +87,20 @@ const YouTubePlayer = ({ videoId }) => {
     if (!ytPlayerRef.current || !ytPlayerRef.current.getCurrentTime) return;
     const currentTime = ytPlayerRef.current.getCurrentTime();
     
-    if (uiState === 0) {
+    if (uiState === 0) { // 아무것도 없을 때 -> A 세팅
       loopData.current.a = currentTime;
       setUiState(1);
-    } else if (uiState === 1) {
+    } else if (uiState === 1) { // A만 있을 때 -> B 세팅
       if (currentTime > loopData.current.a) {
         loopData.current.b = currentTime;
         setUiState(2);
         ytPlayerRef.current.seekTo(loopData.current.a);
         ytPlayerRef.current.playVideo();
-      } else {
+      } else { // B를 A보다 앞선 시간에 누르면 꼬이지 않게 초기화
         loopData.current.a = null;
         setUiState(0);
       }
-    } else {
+    } else { // 반복 중일 때 누르면 -> 모두 해제
       loopData.current.a = null;
       loopData.current.b = null;
       setUiState(0);
@@ -122,7 +123,6 @@ const YouTubePlayer = ({ videoId }) => {
   );
 };
 
-
 const App = () => {
   const [appMode, setAppMode] = useState('class'); 
   const isDemoMode = new URLSearchParams(window.location.search).get('demo') === 'true';
@@ -135,14 +135,19 @@ const App = () => {
   }, []);
   const isMobile = windowWidth <= 768;
 
+  // 웹 교재(HTML) 영역 참조
   const webContentRef = useRef(null);
 
+  // ★ 버니넷 다이렉트 주소 변환기
   const getBunnyPdfUrl = (url) => {
     if (!url) return "";
     const fileName = url.split('/').pop(); 
     return `${PDF_CDN_BASE_URL}/${encodeURIComponent(fileName)}`; 
   };
 
+  // ==========================================
+  // [단어장 상태 및 로직] 
+  // ==========================================
   const [showGuideMain, setShowGuideMain] = useState(true);
   const [progress, setProgress] = useState(() => {
     try { const saved = localStorage.getItem(STORAGE_KEY); return saved ? JSON.parse(saved) : { visitedWords: [], playedExamples: [] }; } 
@@ -185,14 +190,7 @@ const App = () => {
     }
   };
 
-  // ★ 수정: 단어를 누를 때 안전하게 수동으로 뒤로 가기 기록 심기 ★
-  const handleWordSelect = (word) => { 
-    setActiveWord(word); 
-    setCurrentExIdx(0); 
-    if (!progress.visitedWords.includes(word.id)) saveProgress({ ...progress, visitedWords: [...progress.visitedWords, word.id] }); 
-    window.history.pushState({ opened: true }, '', window.location.href);
-  };
-
+  const handleWordSelect = (word) => { setActiveWord(word); setCurrentExIdx(0); if (!progress.visitedWords.includes(word.id)) saveProgress({ ...progress, visitedWords: [...progress.visitedWords, word.id] }); };
   const getAudioUrl = (wordId, exIndex = null) => {
     const cleanId = String(wordId).trim();
     if (exIndex === null) return `${CDN_BASE_URL}/w_${cleanId}.mp3`;
@@ -200,9 +198,13 @@ const App = () => {
   };
   const toggleSpeed = () => setPlaybackRate(prev => (prev === 1.0 ? 0.8 : prev === 0.8 ? 0.6 : 1.0));
 
+// ★ 추가: 앱 나가기 (아이프레임 부모에게 신호 보내기)
   const handleExit = () => {
-    if (isDemoMode) { window.parent.location.href = SALES_PAGE_URL; } 
-    else { window.parent.postMessage('exit_talkori', '*'); }
+    if (isDemoMode) {
+        window.parent.location.href = SALES_PAGE_URL;
+    } else {
+        window.parent.postMessage('exit_talkori', '*');
+    }
   };
 
   const getChapterProgress = (chapter) => {
@@ -215,60 +217,128 @@ const App = () => {
     return totalItems === 0 ? 0 : Math.round((completedItems / totalItems) * 100);
   };
 
-  // ★ 수정: 브라우저 뒤로 가기 낚아채기 리스너 (기절 에러 없이 안전함) ★
-  useEffect(() => {
-    const handleHardwareBack = (e) => {
-      if (activeWord) {
-        setActiveWord(null);
-      } else if (selectedLesson && !isSidebarOpen && isMobile) {
-        setIsSidebarOpen(true);
-      } else if (!showGuideMain && appMode === 'voca') {
-        setShowGuideMain(true);
-      } else if (isSidebarOpen && isMobile) {
-        setIsSidebarOpen(false);
-      }
-    };
-    window.addEventListener('popstate', handleHardwareBack);
-    return () => window.removeEventListener('popstate', handleHardwareBack);
-  }, [activeWord, selectedLesson, isSidebarOpen, showGuideMain, appMode, isMobile]);
+  
 
-  const GuideBook = () => (
-    <div className="flex-1 overflow-y-auto bg-white custom-scrollbar">
-      <header className="flex items-center justify-between p-6 md:hidden sticky top-0 bg-white/90 backdrop-blur-sm z-10 border-b border-slate-100"><button onClick={() => setIsSidebarOpen(true)} className="p-2 bg-slate-50 rounded-lg shadow-sm mr-4"><Menu size={20}/></button><h2 className="text-lg font-bold text-slate-900">Start Guide</h2><div className="w-10"></div></header>
-      <div className="max-w-5xl mx-auto px-6 py-10 md:py-16 space-y-20">
-        <section className="text-center animate-in slide-in-from-bottom-4 duration-500">
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-orange-100 text-orange-700 text-xs font-bold uppercase tracking-wider mb-6"><HelpCircle size={14} /> Why can't I speak?</div>
-          <h1 className="text-4xl md:text-5xl font-black text-slate-900 mb-6 leading-tight">You know the words.<br/><span className="text-[#3713ec]">So why do you freeze?</span></h1>
-          <p className="text-lg text-slate-500 max-w-2xl mx-auto leading-relaxed">Stop memorizing lists like <span className="font-bold bg-slate-100 px-2 py-0.5 rounded text-slate-700">Delicious = 맛있다</span>.<br className="hidden md:block"/> Real conversations don't happen in single words.</p>
-        </section>
-        <section className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-8 animate-in slide-in-from-bottom-4 duration-700 delay-100">
-          <div className="bg-slate-50 p-8 rounded-3xl border border-slate-100 flex flex-col items-center text-center opacity-70 grayscale transition-all hover:grayscale-0 hover:opacity-100 group"><div className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">The Old Way</div><div className="text-3xl font-bold text-slate-400 mb-2 line-through decoration-red-400 decoration-4 group-hover:text-slate-600 transition-colors">Delicious</div><p className="text-sm text-slate-400">Just a frozen word. <br/>You can't use this in real life.</p></div>
-          <div className="bg-[#3713ec] p-8 rounded-3xl shadow-xl shadow-[#3713ec]/20 flex flex-col items-center text-center relative overflow-hidden group"><div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16 blur-2xl"></div><div className="text-xs font-bold text-white/60 uppercase tracking-widest mb-4">The Matrix Way</div><div className="space-y-2 mb-4 relative z-10"><div className="bg-white/10 px-4 py-2 rounded-lg text-white font-bold text-lg">"Is this delicious?" <span className="text-xs font-normal opacity-70 ml-2">(Question)</span></div><div className="bg-white/10 px-4 py-2 rounded-lg text-white font-bold text-lg">"It wasn't delicious." <span className="text-xs font-normal opacity-70 ml-2">(Past)</span></div></div><p className="text-sm text-white/80">We give you <span className="font-bold text-white border-b border-white/40">10 real sentences</span> for every word.</p></div>
-        </section>
-        <section className="animate-in slide-in-from-bottom-4 duration-700 delay-200">
-          <div className="text-center mb-10"><h2 className="text-2xl font-bold text-slate-900 mb-4">Your 45-Day Journey</h2><p className="text-slate-500 max-w-2xl mx-auto leading-relaxed text-sm md:text-base">"Talkori guides you from your room (Day 1) to the heart of Korean society (Day 45). <br className="hidden md:block"/>Expand your world one word at a time."</p></div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 relative">
-            <div className="hidden md:block absolute top-12 left-0 w-full h-0.5 bg-gradient-to-r from-blue-200 via-indigo-200 to-purple-200 -z-10"></div>
-            <div className="bg-white p-6 rounded-2xl border border-blue-100 shadow-sm relative hover:-translate-y-1 transition-transform"><div className="w-10 h-10 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold text-sm mb-4 border-4 border-white">01</div><div className="text-xs font-bold text-blue-500 uppercase tracking-widest mb-1">Day 1 ~ 15</div><h3 className="font-bold text-lg text-slate-900 mb-2">Survival & Intuition</h3><p className="text-sm text-slate-500 leading-relaxed"><span className="font-bold text-slate-700">"Me & My Home"</span><br/>Focus on concrete nouns you can see and touch. Basic survival words like family, body, and food.</p></div>
-            <div className="bg-white p-6 rounded-2xl border border-indigo-100 shadow-sm relative hover:-translate-y-1 transition-transform"><div className="w-10 h-10 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center font-bold text-sm mb-4 border-4 border-white">02</div><div className="text-xs font-bold text-indigo-500 uppercase tracking-widest mb-1">Day 16 ~ 30</div><h3 className="font-bold text-lg text-slate-900 mb-2">Society & Action</h3><p className="text-sm text-slate-500 leading-relaxed"><span className="font-bold text-slate-700">"The City"</span><br/>Step outside. Use transport, banks, and shops. Start using verbs and expressing emotions.</p></div>
-            <div className="bg-white p-6 rounded-2xl border border-purple-100 shadow-sm relative hover:-translate-y-1 transition-transform"><div className="w-10 h-10 bg-purple-100 text-purple-600 rounded-full flex items-center justify-center font-bold text-sm mb-4 border-4 border-white">03</div><div className="text-xs font-bold text-purple-500 uppercase tracking-widest mb-1">Day 31 ~ 45</div><h3 className="font-bold text-lg text-slate-900 mb-2">Connection & Mastery</h3><p className="text-sm text-slate-500 leading-relaxed"><span className="font-bold text-slate-700">"Deep Talk"</span><br/>Master logic, abstract ideas, and polite manners (Honorifics). Complete your Korean nuance.</p></div>
+  // --- 가이드북 컴포넌트 ---
+  const GuideBook = () => {
+    return (
+      <div className="flex-1 overflow-y-auto bg-white custom-scrollbar">
+        <header className="flex items-center justify-between p-6 md:hidden sticky top-0 bg-white/90 backdrop-blur-sm z-10 border-b border-slate-100">
+          <button onClick={() => setIsSidebarOpen(true)} className="p-2 bg-slate-50 rounded-lg shadow-sm mr-4"><Menu size={20}/></button>
+          <h2 className="text-lg font-bold text-slate-900">Start Guide</h2>
+          <div className="w-10"></div>
+        </header>
+
+        <div className="max-w-5xl mx-auto px-6 py-10 md:py-16 space-y-20">
+          <section className="text-center animate-in slide-in-from-bottom-4 duration-500">
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-orange-100 text-orange-700 text-xs font-bold uppercase tracking-wider mb-6">
+              <HelpCircle size={14} /> Why can't I speak?
+            </div>
+            <h1 className="text-4xl md:text-5xl font-black text-slate-900 mb-6 leading-tight">
+              You know the words.<br/>
+              <span className="text-[#3713ec]">So why do you freeze?</span>
+            </h1>
+            <p className="text-lg text-slate-500 max-w-2xl mx-auto leading-relaxed">
+              Stop memorizing lists like <span className="font-bold bg-slate-100 px-2 py-0.5 rounded text-slate-700">Delicious = 맛있다</span>.
+              <br className="hidden md:block"/> Real conversations don't happen in single words.
+            </p>
+          </section>
+
+          <section className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-8 animate-in slide-in-from-bottom-4 duration-700 delay-100">
+            <div className="bg-slate-50 p-8 rounded-3xl border border-slate-100 flex flex-col items-center text-center opacity-70 grayscale transition-all hover:grayscale-0 hover:opacity-100 group">
+              <div className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">The Old Way</div>
+              <div className="text-3xl font-bold text-slate-400 mb-2 line-through decoration-red-400 decoration-4 group-hover:text-slate-600 transition-colors">Delicious</div>
+              <p className="text-sm text-slate-400">Just a frozen word. <br/>You can't use this in real life.</p>
+            </div>
+            <div className="bg-[#3713ec] p-8 rounded-3xl shadow-xl shadow-[#3713ec]/20 flex flex-col items-center text-center relative overflow-hidden group">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16 blur-2xl"></div>
+              <div className="text-xs font-bold text-white/60 uppercase tracking-widest mb-4">The Matrix Way</div>
+              <div className="space-y-2 mb-4 relative z-10">
+                <div className="bg-white/10 px-4 py-2 rounded-lg text-white font-bold text-lg">"Is this delicious?" <span className="text-xs font-normal opacity-70 ml-2">(Question)</span></div>
+                <div className="bg-white/10 px-4 py-2 rounded-lg text-white font-bold text-lg">"It wasn't delicious." <span className="text-xs font-normal opacity-70 ml-2">(Past)</span></div>
+              </div>
+              <p className="text-sm text-white/80">We give you <span className="font-bold text-white border-b border-white/40">10 real sentences</span> for every word.</p>
+            </div>
+          </section>
+
+          <section className="animate-in slide-in-from-bottom-4 duration-700 delay-200">
+             <div className="text-center mb-10">
+                <h2 className="text-2xl font-bold text-slate-900 mb-4">Your 45-Day Journey</h2>
+                <p className="text-slate-500 max-w-2xl mx-auto leading-relaxed text-sm md:text-base">
+                  "Talkori guides you from your room (Day 1) to the heart of Korean society (Day 45). <br className="hidden md:block"/>Expand your world one word at a time."
+                </p>
+             </div>
+             
+             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 relative">
+                <div className="hidden md:block absolute top-12 left-0 w-full h-0.5 bg-gradient-to-r from-blue-200 via-indigo-200 to-purple-200 -z-10"></div>
+                <div className="bg-white p-6 rounded-2xl border border-blue-100 shadow-sm relative hover:-translate-y-1 transition-transform">
+                   <div className="w-10 h-10 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold text-sm mb-4 border-4 border-white">01</div>
+                   <div className="text-xs font-bold text-blue-500 uppercase tracking-widest mb-1">Day 1 ~ 15</div>
+                   <h3 className="font-bold text-lg text-slate-900 mb-2">Survival & Intuition</h3>
+                   <p className="text-sm text-slate-500 leading-relaxed">
+                     <span className="font-bold text-slate-700">"Me & My Home"</span><br/>
+                     Focus on concrete nouns you can see and touch. Basic survival words like family, body, and food.
+                   </p>
+                </div>
+                <div className="bg-white p-6 rounded-2xl border border-indigo-100 shadow-sm relative hover:-translate-y-1 transition-transform">
+                   <div className="w-10 h-10 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center font-bold text-sm mb-4 border-4 border-white">02</div>
+                   <div className="text-xs font-bold text-indigo-500 uppercase tracking-widest mb-1">Day 16 ~ 30</div>
+                   <h3 className="font-bold text-lg text-slate-900 mb-2">Society & Action</h3>
+                   <p className="text-sm text-slate-500 leading-relaxed">
+                     <span className="font-bold text-slate-700">"The City"</span><br/>
+                     Step outside. Use transport, banks, and shops. Start using verbs and expressing emotions.
+                   </p>
+                </div>
+                <div className="bg-white p-6 rounded-2xl border border-purple-100 shadow-sm relative hover:-translate-y-1 transition-transform">
+                   <div className="w-10 h-10 bg-purple-100 text-purple-600 rounded-full flex items-center justify-center font-bold text-sm mb-4 border-4 border-white">03</div>
+                   <div className="text-xs font-bold text-purple-500 uppercase tracking-widest mb-1">Day 31 ~ 45</div>
+                   <h3 className="font-bold text-lg text-slate-900 mb-2">Connection & Mastery</h3>
+                   <p className="text-sm text-slate-500 leading-relaxed">
+                     <span className="font-bold text-slate-700">"Deep Talk"</span><br/>
+                     Master logic, abstract ideas, and polite manners (Honorifics). Complete your Korean nuance.
+                   </p>
+                </div>
+             </div>
+          </section>
+
+          <section className="animate-in slide-in-from-bottom-4 duration-700 delay-300">
+             <h2 className="text-2xl font-bold text-center text-slate-900 mb-10">How to Study?</h2>
+             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="p-6 rounded-2xl bg-slate-50 hover:bg-white border border-transparent hover:border-slate-200 hover:shadow-lg transition-all group">
+                  <div className="w-10 h-10 bg-white text-[#3713ec] rounded-lg shadow-sm flex items-center justify-center mb-4 group-hover:scale-110 transition-transform"><Map size={20} /></div>
+                  <h3 className="font-bold text-base text-slate-900 mb-1">1. The Context</h3>
+                  <p className="text-xs text-slate-500 leading-relaxed">Don't learn in a void. Every word starts in a real situation—like a convenience store or a blind date.</p>
+                </div>
+                <div className="p-6 rounded-2xl bg-slate-50 hover:bg-white border border-transparent hover:border-slate-200 hover:shadow-lg transition-all group">
+                  <div className="w-10 h-10 bg-white text-purple-600 rounded-lg shadow-sm flex items-center justify-center mb-4 group-hover:scale-110 transition-transform"><LayoutGrid size={20} /></div>
+                  <h3 className="font-bold text-base text-slate-900 mb-1">2. The Matrix</h3>
+                  <p className="text-xs text-slate-500 leading-relaxed">Expand one word into 10 expressions. Practice questions, past tense, and even casual "Banmal".</p>
+                </div>
+                <div className="p-6 rounded-2xl bg-slate-50 hover:bg-white border border-transparent hover:border-slate-200 hover:shadow-lg transition-all group">
+                  <div className="w-10 h-10 bg-white text-pink-600 rounded-lg shadow-sm flex items-center justify-center mb-4 group-hover:scale-110 transition-transform"><Waves size={20} /></div>
+                  <h3 className="font-bold text-base text-slate-900 mb-1">3. The Waveform</h3>
+                  <p className="text-xs text-slate-500 leading-relaxed">Listen to the native audio pattern and shadow it until your voice matches the rhythm perfectly.</p>
+                </div>
+             </div>
+          </section>
+
+          <div className="text-center pb-10 animate-in slide-in-from-bottom-4 duration-700 delay-500">
+            <p className="text-slate-400 font-medium mb-6 text-sm">Ready to turn the words you "know" into words you can "speak"?</p>
+            <button 
+              onClick={() => setShowGuideMain(false)} 
+              className="w-full md:w-auto px-12 py-5 bg-[#3713ec] text-white text-lg font-bold rounded-2xl shadow-xl shadow-[#3713ec]/30 hover:scale-105 hover:bg-[#2a0eb5] transition-all flex items-center justify-center gap-3"
+            >
+              Start Day 1 Now <ArrowLeft className="rotate-180" size={20}/>
+            </button>
           </div>
-        </section>
-        <section className="animate-in slide-in-from-bottom-4 duration-700 delay-300">
-          <h2 className="text-2xl font-bold text-center text-slate-900 mb-10">How to Study?</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="p-6 rounded-2xl bg-slate-50 hover:bg-white border border-transparent hover:border-slate-200 hover:shadow-lg transition-all group"><div className="w-10 h-10 bg-white text-[#3713ec] rounded-lg shadow-sm flex items-center justify-center mb-4 group-hover:scale-110 transition-transform"><Map size={20} /></div><h3 className="font-bold text-base text-slate-900 mb-1">1. The Context</h3><p className="text-xs text-slate-500 leading-relaxed">Don't learn in a void. Every word starts in a real situation—like a convenience store or a blind date.</p></div>
-            <div className="p-6 rounded-2xl bg-slate-50 hover:bg-white border border-transparent hover:border-slate-200 hover:shadow-lg transition-all group"><div className="w-10 h-10 bg-white text-purple-600 rounded-lg shadow-sm flex items-center justify-center mb-4 group-hover:scale-110 transition-transform"><LayoutGrid size={20} /></div><h3 className="font-bold text-base text-slate-900 mb-1">2. The Matrix</h3><p className="text-xs text-slate-500 leading-relaxed">Expand one word into 10 expressions. Practice questions, past tense, and even casual "Banmal".</p></div>
-            <div className="p-6 rounded-2xl bg-slate-50 hover:bg-white border border-transparent hover:border-slate-200 hover:shadow-lg transition-all group"><div className="w-10 h-10 bg-white text-pink-600 rounded-lg shadow-sm flex items-center justify-center mb-4 group-hover:scale-110 transition-transform"><Waves size={20} /></div><h3 className="font-bold text-base text-slate-900 mb-1">3. The Waveform</h3><p className="text-xs text-slate-500 leading-relaxed">Listen to the native audio pattern and shadow it until your voice matches the rhythm perfectly.</p></div>
-          </div>
-        </section>
-        <div className="text-center pb-10 animate-in slide-in-from-bottom-4 duration-700 delay-500">
-          <button onClick={() => setShowGuideMain(false)} className="w-full md:w-auto px-12 py-5 bg-[#3713ec] text-white text-lg font-bold rounded-2xl shadow-xl shadow-[#3713ec]/30 hover:scale-105 hover:bg-[#2a0eb5] transition-all flex items-center justify-center gap-3">Start Day 1 Now <ArrowLeft className="rotate-180" size={20}/></button>
         </div>
       </div>
-    </div>
-  );
+    );
+  };
 
+  // ==========================================
+  // [강의실 상태 및 로직] 
+  // ==========================================
   const [selectedCourse, setSelectedCourse] = useState('MAIN233');
   const [openSection, setOpenSection] = useState(null); 
   const [selectedLesson, setSelectedLesson] = useState(null);
@@ -304,6 +374,7 @@ const App = () => {
     setContentTab('pdf');
   }, [selectedLesson]);
 
+// ★ 1. 완벽 해결: 퀴즈 전역 함수 유지 + 토글 예외사항(1, 5강) 스마트 감지 ★
   useEffect(() => {
     if (appMode !== 'class' || contentTab !== 'pdf' || !webContentRef.current) return;
     const container = webContentRef.current;
@@ -314,16 +385,30 @@ const App = () => {
       const feedbackArea = document.getElementById(feedbackId);
       const resultText = document.getElementById('feedback-result');
 
-      options.forEach(opt => { opt.style.borderColor = "#fff"; opt.style.backgroundColor = "#fff"; opt.style.color = "#334155"; });
-      if (isCorrect) { element.style.borderColor = "#22c55e"; element.style.backgroundColor = "#f0fdf4"; element.style.color = "#15803d"; if (resultText) { resultText.innerText = "✅ Correct!"; resultText.style.color = "#22c55e"; } } 
-      else { element.style.borderColor = "#ef4444"; element.style.backgroundColor = "#fef2f2"; element.style.color = "#b91c1c"; if (resultText) { resultText.innerText = "❌ Try Again!"; resultText.style.color = "#ef4444"; } }
+      options.forEach(opt => {
+        opt.style.borderColor = "#fff"; opt.style.backgroundColor = "#fff"; opt.style.color = "#334155";
+      });
+
+      if (isCorrect) {
+        element.style.borderColor = "#22c55e"; element.style.backgroundColor = "#f0fdf4"; element.style.color = "#15803d";
+        if (resultText) { resultText.innerText = "✅ Correct!"; resultText.style.color = "#22c55e"; }
+      } else {
+        element.style.borderColor = "#ef4444"; element.style.backgroundColor = "#fef2f2"; element.style.color = "#b91c1c";
+        if (resultText) { resultText.innerText = "❌ Try Again!"; resultText.style.color = "#ef4444"; }
+      }
       if (feedbackArea) feedbackArea.classList.remove('hidden');
     };
 
     window.checkQuiz = (num, isCorrect) => {
-      document.querySelectorAll('.quiz-option').forEach(el => { el.classList.remove('active-correct', 'active-wrong'); const span = el.querySelector('span:last-child'); if (span) span.style.opacity = "0"; });
-      const selected = document.getElementById('opt-' + num); const mark = document.getElementById('mark-' + num);
-      if (isCorrect) selected?.classList.add('active-correct'); else selected?.classList.add('active-wrong');
+      document.querySelectorAll('.quiz-option').forEach(el => {
+        el.classList.remove('active-correct', 'active-wrong');
+        const span = el.querySelector('span:last-child');
+        if (span) span.style.opacity = "0";
+      });
+      const selected = document.getElementById('opt-' + num);
+      const mark = document.getElementById('mark-' + num);
+      if (isCorrect) selected?.classList.add('active-correct');
+      else selected?.classList.add('active-wrong');
       if (mark) mark.style.opacity = "1";
       document.getElementById('quiz-feedback')?.classList.remove('hidden');
     };
@@ -334,27 +419,46 @@ const App = () => {
         setTimeout(() => {
           const sw = switchLabel.querySelector('input[type="checkbox"]');
           if (!sw) return;
-          const idMatch = sw.id.match(/\d+/); if (!idMatch) return; const id = idMatch[0];
-          const korText = document.getElementById('kor-' + id); const engText = document.getElementById('eng-' + id) || document.getElementById('nuance-' + id);
+
+          const idMatch = sw.id.match(/\d+/);
+          if (!idMatch) return;
+          const id = idMatch[0];
+
+          const korText = document.getElementById('kor-' + id);
+          const engText = document.getElementById('eng-' + id) || document.getElementById('nuance-' + id);
 
           if (korText) {
             const textOn = korText.getAttribute('data-opt2') || korText.getAttribute('data-transformed') || korText.getAttribute('data-casual') || korText.getAttribute('data-confirm');
             const textOff = korText.getAttribute('data-opt1') || korText.getAttribute('data-base') || korText.getAttribute('data-polite') || korText.getAttribute('data-simple');
-            if (textOn && textOff) { korText.innerText = sw.checked ? textOn : textOff; korText.style.color = sw.checked ? '#526ae5' : '#1e293b'; }
+            if (textOn && textOff) {
+              korText.innerText = sw.checked ? textOn : textOff;
+              korText.style.color = sw.checked ? '#526ae5' : '#1e293b';
+            }
           }
           if (engText) {
-            const engOn = engText.getAttribute('data-eng2') || engText.getAttribute('data-n2'); const engOff = engText.getAttribute('data-eng1') || engText.getAttribute('data-n1');
-            if (engOn && engOff) engText.innerText = sw.checked ? engOn : engOff;
+            const engOn = engText.getAttribute('data-eng2') || engText.getAttribute('data-n2');
+            const engOff = engText.getAttribute('data-eng1') || engText.getAttribute('data-n1');
+            if (engOn && engOff) {
+              engText.innerText = sw.checked ? engOn : engOff;
+            }
           }
         }, 10);
       }
     };
+
     container.addEventListener('click', handleToggleClick);
-    return () => { if (container) container.removeEventListener('click', handleToggleClick); delete window.handleChoice; delete window.checkQuiz; };
+
+    return () => {
+      if (container) container.removeEventListener('click', handleToggleClick);
+      delete window.handleChoice;
+      delete window.checkQuiz;
+    };
   }, [selectedLesson, contentTab, appMode]);
 
+// ★ 수술 2: 리모컨 부품을 렌더링하도록 교체 ★
   const renderMedia = (url) => {
     if (!url) return <div className="aspect-video w-full flex flex-col items-center justify-center text-white/50 font-bold gap-2"><MonitorPlay size={40} className="opacity-50"/>영상/음원이 아직 준비되지 않았습니다.</div>;
+    
     if (url.includes('youtu.be') || url.includes('youtube.com')) {
       let vid = "";
       if (url.includes('youtu.be/')) vid = url.split('youtu.be/')[1]?.split('?')[0];
@@ -362,10 +466,19 @@ const App = () => {
       else if (url.includes('embed/')) vid = url.split('embed/')[1]?.split('?')[0];
       return <YouTubePlayer videoId={vid} />;
     }
-    if (url.match(/\.(m4a|mp3|wav)$/i)) return <div className="aspect-video w-full flex flex-col items-center justify-center bg-slate-900"><Volume2 size={48} className="text-white/30 mb-6" /><audio controls src={url} className="w-3/4 outline-none"></audio></div>;
+    
+    if (url.match(/\.(m4a|mp3|wav)$/i)) {
+      return (
+        <div className="aspect-video w-full flex flex-col items-center justify-center bg-slate-900">
+          <Volume2 size={48} className="text-white/30 mb-6" />
+          <audio controls src={url} className="w-3/4 outline-none"></audio>
+        </div>
+      );
+    }
     return <video controls src={url} className="aspect-video w-full object-contain outline-none bg-black"></video>;
   };
 
+  // ★ 현재 강의 기준 이전/다음 강의 찾기 로직
   const currentCourseLessons = groupedClassData[selectedCourse]?.sections.flatMap(s => s.lessons) || [];
   const currentLessonIdx = currentCourseLessons.findIndex(l => l.lesson_id === selectedLesson?.lesson_id);
   const prevLesson = currentLessonIdx > 0 ? currentCourseLessons[currentLessonIdx - 1] : null;
@@ -373,22 +486,38 @@ const App = () => {
 
   return (
     <div className="flex h-screen bg-white md:bg-[#f6f6f8] font-sans text-slate-800 overflow-hidden relative">
+      
+      {/* 1. 사이드바 */}
       <div className={`w-80 bg-white border-r border-slate-200 shadow-xl flex flex-col h-full shrink-0 z-50 ${isSidebarOpen ? 'fixed inset-y-0 left-0 translate-x-0' : 'hidden md:flex'}`}>
-        <div className="p-6 border-b border-slate-50 shrink-0 bg-[#3713ec] text-white flex justify-between items-center"><div className="flex items-center gap-3"><GraduationCap size={28} /><div><h1 className="font-black text-2xl tracking-tight">Talkori</h1><p className="text-[10px] font-bold uppercase tracking-widest text-blue-200">Mastery Platform</p></div></div><button onClick={() => setIsSidebarOpen(false)} className="md:hidden p-2 text-white/70 hover:text-white"><X size={20}/></button></div>
+        <div className="p-6 border-b border-slate-50 shrink-0 bg-[#3713ec] text-white flex justify-between items-center">
+          <div className="flex items-center gap-3"><GraduationCap size={28} /><div><h1 className="font-black text-2xl tracking-tight">Talkori</h1><p className="text-[10px] font-bold uppercase tracking-widest text-blue-200">Mastery Platform</p></div></div>
+          <button onClick={() => setIsSidebarOpen(false)} className="md:hidden p-2 text-white/70 hover:text-white"><X size={20}/></button>
+        </div>
+
         <div className="flex-1 overflow-y-auto custom-scrollbar p-4">
           {appMode === 'class' ? (
             <div className="animate-in fade-in duration-300">
-              <div className="mb-6 space-y-2"><p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-2">Select Course</p>
-                {Object.keys(groupedClassData).map(cId => (<button key={cId} onClick={() => setSelectedCourse(cId)} className={`w-full text-left p-3 rounded-xl text-sm font-bold transition-all ${selectedCourse === cId ? 'bg-[#3713ec] text-white shadow-md' : 'bg-slate-50 text-slate-600 hover:bg-slate-100'}`}>{groupedClassData[cId].title}</button>))}
+              <div className="mb-6 space-y-2">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-2">Select Course</p>
+                {Object.keys(groupedClassData).map(cId => (
+                  <button key={cId} onClick={() => setSelectedCourse(cId)} className={`w-full text-left p-3 rounded-xl text-sm font-bold transition-all ${selectedCourse === cId ? 'bg-[#3713ec] text-white shadow-md' : 'bg-slate-50 text-slate-600 hover:bg-slate-100'}`}>
+                    {groupedClassData[cId].title}
+                  </button>
+                ))}
               </div>
-              <div className="space-y-2"><p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-2 mb-2">Curriculum</p>
+              <div className="space-y-2">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-2 mb-2">Curriculum</p>
                 {groupedClassData[selectedCourse]?.sections.map((section, sIdx) => (
                   <div key={sIdx} className="border border-slate-100 rounded-xl overflow-hidden bg-white shadow-sm">
-                    <button onClick={() => setOpenSection(openSection === section.title ? null : section.title)} className="w-full flex items-center justify-between p-4 bg-slate-50/50 hover:bg-slate-50 transition-colors"><span className="font-bold text-sm text-slate-800 text-left">{section.title}</span><ChevronDown size={16} className={`text-slate-400 transition-transform ${openSection === section.title ? 'rotate-180' : ''}`} /></button>
+                    <button onClick={() => setOpenSection(openSection === section.title ? null : section.title)} className="w-full flex items-center justify-between p-4 bg-slate-50/50 hover:bg-slate-50 transition-colors">
+                      <span className="font-bold text-sm text-slate-800 text-left">{section.title}</span><ChevronDown size={16} className={`text-slate-400 transition-transform ${openSection === section.title ? 'rotate-180' : ''}`} />
+                    </button>
                     {openSection === section.title && (
                       <div className="p-2 space-y-1 bg-white border-t border-slate-100">
                         {section.lessons.length > 0 ? section.lessons.map((lesson, lIdx) => (
-                          <div key={lesson.lesson_id} onClick={() => { setSelectedLesson(lesson); setIsSidebarOpen(false); window.scrollTo(0,0); if(isMobile) window.history.pushState({ opened: true }, '', window.location.href); }} className={`p-3 text-xs font-bold rounded-lg cursor-pointer transition-all ${selectedLesson?.lesson_id === lesson.lesson_id ? 'bg-blue-50 text-[#3713ec]' : 'text-slate-600 hover:bg-slate-50'}`}><span className="text-slate-400 mr-2">{lIdx + 1}.</span> {lesson.title}</div>
+                          <div key={lesson.lesson_id} onClick={() => { setSelectedLesson(lesson); setIsSidebarOpen(false); window.scrollTo(0,0); }} className={`p-3 text-xs font-bold rounded-lg cursor-pointer transition-all ${selectedLesson?.lesson_id === lesson.lesson_id ? 'bg-blue-50 text-[#3713ec]' : 'text-slate-600 hover:bg-slate-50'}`}>
+                            <span className="text-slate-400 mr-2">{lIdx + 1}.</span> {lesson.title}
+                          </div>
                         )) : <div className="p-3 text-xs font-bold text-slate-400 text-center">강의 준비 중입니다.</div>}
                       </div>
                     )}
@@ -398,12 +527,22 @@ const App = () => {
             </div>
           ) : (
             <div className="animate-in fade-in duration-300">
-               <div onClick={() => { setShowGuideMain(true); setActiveWord(null); setIsSidebarOpen(false); }} className={`flex items-center gap-4 p-3 mb-4 rounded-xl border cursor-pointer transition-colors ${showGuideMain ? 'bg-blue-50 border-blue-100' : 'bg-white border-slate-100 hover:bg-slate-50'}`}><div className={`w-8 h-8 rounded-full flex items-center justify-center ${showGuideMain ? 'bg-blue-200 text-blue-600' : 'bg-slate-100 text-slate-400'}`}><BookOpen size={16} /></div><div><h3 className={`font-bold text-sm ${showGuideMain ? 'text-blue-800' : 'text-slate-700'}`}>How to Study?</h3><p className={`text-[10px] font-bold uppercase ${showGuideMain ? 'text-blue-500' : 'text-slate-400'}`}>Guide Book</p></div></div>
+               <div onClick={() => { setShowGuideMain(true); setActiveWord(null); setIsSidebarOpen(false); }} className={`flex items-center gap-4 p-3 mb-4 rounded-xl border cursor-pointer transition-colors ${showGuideMain ? 'bg-blue-50 border-blue-100' : 'bg-white border-slate-100 hover:bg-slate-50'}`}>
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${showGuideMain ? 'bg-blue-200 text-blue-600' : 'bg-slate-100 text-slate-400'}`}><BookOpen size={16} /></div>
+                <div><h3 className={`font-bold text-sm ${showGuideMain ? 'text-blue-800' : 'text-slate-700'}`}>How to Study?</h3><p className={`text-[10px] font-bold uppercase ${showGuideMain ? 'text-blue-500' : 'text-slate-400'}`}>Guide Book</p></div>
+              </div>
               <div className="h-px bg-slate-100 mb-4 mx-2"></div>
               {CURRICULUM.map((chapter, idx) => {
-                const percentage = getChapterProgress(chapter); const isActive = !showGuideMain && activeChapter?.chapterId === chapter.chapterId;
+                const percentage = getChapterProgress(chapter);
+                const isActive = !showGuideMain && activeChapter?.chapterId === chapter.chapterId;
                 return (
-                  <div key={idx} onClick={() => { setActiveChapter(chapter); setActiveWord(null); setShowGuideMain(false); setIsSidebarOpen(false); }} className={`flex items-start gap-4 p-3 rounded-xl cursor-pointer transition-all mb-2 ${isActive ? 'bg-[#3713ec]/5 border border-[#3713ec]/10' : 'hover:bg-slate-50'}`}><div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 font-bold text-xs ${isActive ? 'bg-[#3713ec] text-white' : 'bg-slate-100 text-slate-400'}`}>{chapter.chapterId}</div><div className="flex-1 overflow-hidden"><h3 className={`font-bold text-sm truncate ${isActive ? 'text-[#3713ec]' : 'text-slate-600'}`}>{chapter.title}</h3><div className="mt-2 w-full h-1.5 bg-slate-100 rounded-full overflow-hidden flex items-center"><div className="h-full bg-[#3713ec] transition-all duration-500" style={{ width: `${percentage}%` }}></div></div></div></div>
+                  <div key={idx} onClick={() => { setActiveChapter(chapter); setActiveWord(null); setShowGuideMain(false); setIsSidebarOpen(false); }} className={`flex items-start gap-4 p-3 rounded-xl cursor-pointer transition-all mb-2 ${isActive ? 'bg-[#3713ec]/5 border border-[#3713ec]/10' : 'hover:bg-slate-50'}`}>
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 font-bold text-xs ${isActive ? 'bg-[#3713ec] text-white' : 'bg-slate-100 text-slate-400'}`}>{chapter.chapterId}</div>
+                    <div className="flex-1 overflow-hidden">
+                      <h3 className={`font-bold text-sm truncate ${isActive ? 'text-[#3713ec]' : 'text-slate-600'}`}>{chapter.title}</h3>
+                      <div className="mt-2 w-full h-1.5 bg-slate-100 rounded-full overflow-hidden flex items-center"><div className="h-full bg-[#3713ec] transition-all duration-500" style={{ width: `${percentage}%` }}></div></div>
+                    </div>
+                  </div>
                 );
               })}
             </div>
@@ -411,9 +550,16 @@ const App = () => {
         </div>
       </div>
 
+      {/* 2. 메인 화면 영역 */}
       <div className="flex-1 flex flex-col h-full relative overflow-x-hidden">
+        
+{/* ★ 수정: 글로벌 컨트롤 (속도 조절 & 나가기 버튼) 최상단 통합 ★ */}
         <nav className="h-16 bg-white border-b border-slate-100 flex items-center justify-between px-4 md:px-6 shrink-0 z-40 relative">
-          <div className="flex items-center gap-2 w-1/4 md:w-1/3"><button onClick={() => setIsSidebarOpen(true)} className="md:hidden p-2 text-slate-500 hover:text-slate-800"><Menu size={24}/></button></div>
+          <div className="flex items-center gap-2 w-1/4 md:w-1/3">
+            <button onClick={() => setIsSidebarOpen(true)} className="md:hidden p-2 text-slate-500 hover:text-slate-800"><Menu size={24}/></button>
+          </div>
+          
+          {/* Pill Toggle Switch */}
           <div className="flex justify-center flex-1 md:w-1/3">
             <div className="flex bg-slate-100 p-1 rounded-full relative w-48 md:w-64">
               <div className={`absolute top-1 bottom-1 w-[calc(50%-4px)] rounded-full transition-transform duration-300 ease-out shadow-sm ${appMode === 'class' ? 'translate-x-0 bg-[#3713ec]' : 'translate-x-[calc(100%+8px)] bg-purple-600'}`}></div>
@@ -421,18 +567,35 @@ const App = () => {
               <button onClick={() => { setAppMode('voca'); stopCurrentAudio(); }} className={`relative z-10 flex-1 py-1.5 md:py-2 text-[10px] md:text-xs font-black uppercase transition-colors flex items-center justify-center gap-1.5 ${appMode === 'voca' ? 'text-white' : 'text-slate-500 hover:text-slate-800'}`}><BookA size={14} /> Voca</button>
             </div>
           </div>
+          
+          {/* 우측 글로벌 컨트롤 (속도 조절 & 나가기) */}
           <div className="flex items-center justify-end gap-1 md:gap-3 w-1/4 md:w-1/3">
-            <button onClick={toggleSpeed} className={`flex items-center gap-1 px-2 md:px-3 py-1.5 rounded-full text-[10px] md:text-xs font-bold transition-colors ${appMode === 'voca' ? 'bg-purple-600/10 text-purple-600' : 'bg-[#3713ec]/10 text-[#3713ec]'}`}><Gauge size={14} /> <span className="hidden sm:inline">{playbackRate}x</span><span className="sm:hidden">{playbackRate}</span></button>
-            <button onClick={handleExit} className="p-2 text-slate-400 hover:text-red-500 transition-colors hidden sm:block">{isDemoMode ? <Sparkles size={18}/> : <LogOut size={18}/>}</button>
-            <button onClick={handleExit} className="p-1.5 text-slate-400 hover:text-red-500 transition-colors sm:hidden"><LogOut size={16}/></button>
+            <button onClick={toggleSpeed} className={`flex items-center gap-1 px-2 md:px-3 py-1.5 rounded-full text-[10px] md:text-xs font-bold transition-colors ${appMode === 'voca' ? 'bg-purple-600/10 text-purple-600' : 'bg-[#3713ec]/10 text-[#3713ec]'}`}>
+              <Gauge size={14} /> <span className="hidden sm:inline">{playbackRate}x</span><span className="sm:hidden">{playbackRate}</span>
+            </button>
+            <button onClick={handleExit} className="p-2 text-slate-400 hover:text-red-500 transition-colors hidden sm:block">
+              {isDemoMode ? <Sparkles size={18}/> : <LogOut size={18}/>}
+            </button>
+            {/* 모바일용 미니 나가기 버튼 */}
+            <button onClick={handleExit} className="p-1.5 text-slate-400 hover:text-red-500 transition-colors sm:hidden">
+              <LogOut size={16}/>
+            </button>
           </div>
         </nav>
 
         <div className="flex-1 overflow-y-auto custom-scrollbar relative bg-white md:bg-transparent">
           {appMode === 'class' ? (
             selectedLesson ? (
+              // ★ 엣지-투-엣지 디자인: 모바일에서는 패딩 0, PC에서는 패딩 8 유지
               <div className="max-w-4xl mx-auto md:p-8 w-full animate-in fade-in zoom-in-95 duration-300 pb-10">
-                <header className="px-5 py-6 md:px-0 md:py-0 md:mb-6 space-y-2 bg-white md:bg-transparent"><h1 className="text-2xl md:text-4xl font-black tracking-tight text-slate-900 korean-text leading-tight">{selectedLesson.title}</h1><div className="flex gap-4 text-[10px] md:text-xs font-bold text-slate-400 uppercase"><span className="flex items-center gap-1"><MonitorPlay size={14}/> {groupedClassData[selectedCourse].title}</span></div></header>
+                
+                {/* 헤더 영역 (모바일 여백 축소) */}
+                <header className="px-5 py-6 md:px-0 md:py-0 md:mb-6 space-y-2 bg-white md:bg-transparent">
+                  <h1 className="text-2xl md:text-4xl font-black tracking-tight text-slate-900 korean-text leading-tight">{selectedLesson.title}</h1>
+                  <div className="flex gap-4 text-[10px] md:text-xs font-bold text-slate-400 uppercase"><span className="flex items-center gap-1"><MonitorPlay size={14}/> {groupedClassData[selectedCourse].title}</span></div>
+                </header>
+
+{/* ★ 수술 3: 리모컨이 들어갈 수 있도록 액자 사이즈 조절 ★ */}
                 {(() => {
                   const isMainCourse = selectedLesson.course === 'MAIN233';
                   if (isMainCourse) {
@@ -440,30 +603,62 @@ const App = () => {
                     if (availableTabs.length === 0) return null;
                     return (
                       <section className="w-full">
-                        <div className="flex gap-2 overflow-x-auto px-5 md:px-0 pb-3 md:pb-3 custom-scrollbar">{availableTabs.map(t => (<button key={t} onClick={() => setVideoTab(t)} className={`px-6 py-2 rounded-full shrink-0 text-[10px] font-black uppercase transition-all ${videoTab === t ? 'bg-[#3713ec] text-white shadow-lg' : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-100'}`}>{t} Video</button>))}</div>
-                        <div className="w-full bg-black md:rounded-[2rem] md:shadow-xl relative md:border-4 border-slate-200 flex flex-col items-center justify-center overflow-hidden">{renderMedia(selectedLesson?.video_urls?.[videoTab])}</div>
+                        <div className="flex gap-2 overflow-x-auto px-5 md:px-0 pb-3 md:pb-3 custom-scrollbar">
+                          {availableTabs.map(t => (<button key={t} onClick={() => setVideoTab(t)} className={`px-6 py-2 rounded-full shrink-0 text-[10px] font-black uppercase transition-all ${videoTab === t ? 'bg-[#3713ec] text-white shadow-lg' : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-100'}`}>{t} Video</button>))}
+                        </div>
+                        <div className="w-full bg-black md:rounded-[2rem] md:shadow-xl relative md:border-4 border-slate-200 flex flex-col items-center justify-center overflow-hidden">
+                          {renderMedia(selectedLesson?.video_urls?.[videoTab])}
+                        </div>
                       </section>
                     );
                   } else {
                     const subVideoUrl = selectedLesson?.video_urls?.video || selectedLesson?.video_urls?.shorts;
                     if (!subVideoUrl) return null;
                     return (
-                      <section className="w-full mt-4 md:mt-0"><div className="w-full bg-black md:rounded-[2rem] md:shadow-xl relative md:border-4 border-slate-200 flex flex-col items-center justify-center overflow-hidden">{renderMedia(subVideoUrl)}</div></section>
+                      <section className="w-full mt-4 md:mt-0">
+                        <div className="w-full bg-black md:rounded-[2rem] md:shadow-xl relative md:border-4 border-slate-200 flex flex-col items-center justify-center overflow-hidden">
+                          {renderMedia(subVideoUrl)}
+                        </div>
+                      </section>
                     );
                   }
                 })()}
+                
+                {/* ★ 교재 영역: 모바일에서는 테두리 제거 및 화면에 꽉 차게 렌더링 */}
                 <section className="bg-white md:rounded-[2rem] md:border border-slate-200 md:shadow-sm overflow-hidden flex flex-col md:mt-8 border-t border-slate-100">
-                  <div className="flex border-b border-slate-100"><button onClick={() => setContentTab('pdf')} className={`flex-1 py-4 text-[10px] md:text-xs font-black tracking-widest transition-all flex items-center justify-center gap-1.5 md:gap-2 ${contentTab === 'pdf' ? 'text-[#3713ec] bg-blue-50/50' : 'text-slate-400 hover:bg-slate-50'}`}><FileText size={16}/> TEXTBOOK</button><button onClick={() => setContentTab('script')} className={`flex-1 py-4 text-[10px] md:text-xs font-black tracking-widest transition-all flex items-center justify-center gap-1.5 md:gap-2 ${contentTab === 'script' ? 'text-[#3713ec] bg-blue-50/50' : 'text-slate-400 hover:bg-slate-50'}`}><Mic size={16}/> SHADOWING</button></div>
+                  <div className="flex border-b border-slate-100">
+                    <button onClick={() => setContentTab('pdf')} className={`flex-1 py-4 text-[10px] md:text-xs font-black tracking-widest transition-all flex items-center justify-center gap-1.5 md:gap-2 ${contentTab === 'pdf' ? 'text-[#3713ec] bg-blue-50/50' : 'text-slate-400 hover:bg-slate-50'}`}><FileText size={16}/> TEXTBOOK</button>
+                    <button onClick={() => setContentTab('script')} className={`flex-1 py-4 text-[10px] md:text-xs font-black tracking-widest transition-all flex items-center justify-center gap-1.5 md:gap-2 ${contentTab === 'script' ? 'text-[#3713ec] bg-blue-50/50' : 'text-slate-400 hover:bg-slate-50'}`}><Mic size={16}/> SHADOWING</button>
+                  </div>
+                  
                   <div className="min-h-[500px] w-full bg-slate-50/30">
                     {contentTab === 'pdf' ? (
                       selectedLesson.course === 'MAIN233' ? (
                         selectedLesson.pdf_url ? (
+                          /* ★ 독립형 뷰어 연결 (버니넷 우회) ★ */
                           <div className="w-full h-[600px] md:h-[800px] bg-[#525659] md:rounded-b-[2rem] overflow-hidden relative">
-                            {isMobile ? (<iframe src={`/pdfjs/web/viewer.html?file=${encodeURIComponent(getBunnyPdfUrl(selectedLesson.pdf_url))}`} className="w-full h-full border-0" title="Talkori Textbook Mobile" />) : (<iframe src={`${selectedLesson.pdf_url}#toolbar=0&navpanes=0&view=FitH`} className="w-full h-full border-0" title="Talkori Textbook PC" />)}
+                            {isMobile ? (
+                              <iframe 
+                                src={`/pdfjs/web/viewer.html?file=${encodeURIComponent(getBunnyPdfUrl(selectedLesson.pdf_url))}`}
+                                className="w-full h-full border-0"
+                                title="Talkori Textbook Mobile"
+                              />
+                            ) : (
+                              <iframe 
+                                src={`${selectedLesson.pdf_url}#toolbar=0&navpanes=0&view=FitH`}
+                                className="w-full h-full border-0"
+                                title="Talkori Textbook PC"
+                              />
+                            )}
                           </div>
                         ) : (<div className="flex flex-col items-center justify-center h-[400px] text-slate-400"><FileText size={48} className="mb-4 opacity-30"/><p className="font-bold text-sm">이 강의는 PDF 교재가 없습니다.</p></div>)
                       ) : (
-                        selectedLesson.web_content ? (<div className="w-full h-auto bg-white p-4 md:p-8" ref={webContentRef}><div className="w-full text-left text-slate-800 leading-relaxed overflow-x-hidden" dangerouslySetInnerHTML={{ __html: selectedLesson.web_content }} /></div>) : (<div className="flex flex-col items-center justify-center h-[400px] text-slate-400"><FileText size={48} className="mb-4 opacity-30"/><p className="font-bold text-sm">웹 교재가 아직 등록되지 않았습니다.</p></div>)
+                        selectedLesson.web_content ? (
+                          /* 웹교재 모바일 여백 최소화 */
+                          <div className="w-full h-auto bg-white p-4 md:p-8" ref={webContentRef}>
+                            <div className="w-full text-left text-slate-800 leading-relaxed overflow-x-hidden" dangerouslySetInnerHTML={{ __html: selectedLesson.web_content }} />
+                          </div>
+                        ) : (<div className="flex flex-col items-center justify-center h-[400px] text-slate-400"><FileText size={48} className="mb-4 opacity-30"/><p className="font-bold text-sm">웹 교재가 아직 등록되지 않았습니다.</p></div>)
                       )
                     ) : (
                       <div className="p-4 md:p-8 space-y-3">
@@ -472,9 +667,10 @@ const App = () => {
                             <div key={idx} className="flex items-center gap-3 md:gap-4 p-4 md:p-6 bg-white hover:bg-blue-50/50 border border-slate-100 hover:border-blue-200 rounded-2xl transition-all shadow-sm group">
                               <button onClick={() => { const audioUrl = `${CLASS_AUDIO_BASE_URL}/${line.audio}`; playAudio(audioUrl, 'class', `${selectedLesson.lesson_id}_${idx}`); }} className="w-10 h-10 md:w-12 md:h-12 shrink-0 rounded-full bg-slate-50 border border-slate-200 text-slate-400 flex items-center justify-center group-hover:bg-[#3713ec] group-hover:text-white group-hover:border-[#3713ec] transition-all shadow-sm"><Volume2 size={18} /></button>
                               <div className="flex-1">
-                                {line.type && <span className="text-[10px] font-bold text-[#3713ec] uppercase tracking-wider mb-1 block">{line.type}</span>}
-                                <p className="text-base md:text-lg font-bold text-slate-800 korean-text leading-snug break-keep">{line.ko}</p><p className="text-xs md:text-sm text-slate-500 mt-1 italic">{line.en}</p>
-                              </div>
+  {line.type && <span className="text-[10px] font-bold text-[#3713ec] uppercase tracking-wider mb-1 block">{line.type}</span>}
+  <p className="text-base md:text-lg font-bold text-slate-800 korean-text leading-snug break-keep">{line.ko}</p>
+  <p className="text-xs md:text-sm text-slate-500 mt-1 italic">{line.en}</p>
+</div>
                             </div>
                           ))
                         ) : (<div className="flex flex-col items-center justify-center h-[400px] text-slate-400"><Mic size={48} className="mb-4 opacity-30"/><p className="font-bold text-sm">오디오 스크립트가 아직 등록되지 않았습니다.</p></div>)}
@@ -482,10 +678,18 @@ const App = () => {
                     )}
                   </div>
                 </section>
+
+                {/* ★ 모바일 강의실 전용 PREV/NEXT 네비게이션 버튼 추가 ★ */}
                 <footer className="flex justify-between items-center p-5 md:p-0 mt-2 md:mt-8 border-t border-slate-100 md:border-none bg-white md:bg-transparent">
-                  {prevLesson ? (<button onClick={() => { setSelectedLesson(prevLesson); window.scrollTo(0,0); if(isMobile) window.history.pushState({ opened: true }, '', window.location.href); }} className="flex items-center gap-1 md:gap-2 px-4 md:px-6 py-2.5 md:py-3 rounded-xl font-bold text-slate-500 hover:bg-slate-100 transition-all text-xs md:text-sm"><ChevronLeft size={16} /> <span className="hidden sm:inline">PREV LESSON</span><span className="sm:hidden">PREV</span></button>) : <div></div>}
-                  {nextLesson ? (<button onClick={() => { setSelectedLesson(nextLesson); window.scrollTo(0,0); if(isMobile) window.history.pushState({ opened: true }, '', window.location.href); }} className="flex items-center gap-1 md:gap-2 px-5 md:px-8 py-2.5 md:py-3 bg-slate-900 text-white rounded-xl font-bold shadow-lg hover:scale-105 transition-all text-xs md:text-sm"><span className="hidden sm:inline">NEXT LESSON</span><span className="sm:hidden">NEXT</span> <ChevronRight size={16}/></button>) : <div></div>}
+                  {prevLesson ? (
+                    <button onClick={() => { setSelectedLesson(prevLesson); window.scrollTo(0,0); }} className="flex items-center gap-1 md:gap-2 px-4 md:px-6 py-2.5 md:py-3 rounded-xl font-bold text-slate-500 hover:bg-slate-100 transition-all text-xs md:text-sm"><ChevronLeft size={16} /> <span className="hidden sm:inline">PREV LESSON</span><span className="sm:hidden">PREV</span></button>
+                  ) : <div></div>}
+                  
+                  {nextLesson ? (
+                    <button onClick={() => { setSelectedLesson(nextLesson); window.scrollTo(0,0); }} className="flex items-center gap-1 md:gap-2 px-5 md:px-8 py-2.5 md:py-3 bg-slate-900 text-white rounded-xl font-bold shadow-lg hover:scale-105 transition-all text-xs md:text-sm"><span className="hidden sm:inline">NEXT LESSON</span><span className="sm:hidden">NEXT</span> <ChevronRight size={16}/></button>
+                  ) : <div></div>}
                 </footer>
+
               </div>
             ) : (<div className="flex h-full items-center justify-center text-slate-400 font-bold">좌측에서 레슨을 선택해주세요.</div>)
           ) : (
@@ -509,14 +713,24 @@ const App = () => {
                 </div>
               ) : (
                 <div className="flex-1 flex flex-col overflow-hidden bg-[#f6f6f8] animate-in fade-in duration-300">
+<header className="bg-white border-b border-slate-200 px-4 md:px-6 py-3 md:py-4 flex justify-between items-center shrink-0">
+  <button onClick={() => setActiveWord(null)} className="flex items-center gap-2 text-slate-500 font-bold text-xs md:text-sm hover:text-purple-600 transition-all">
+    <ArrowLeft size={16} /> Back
+  </button>
+</header>
                   <main className="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar">
                     <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6 md:gap-8 items-start">
-                      <div className="lg:col-span-5 space-y-4 md:space-y-6">
+<div className="lg:col-span-5 space-y-4 md:space-y-6">
+                        {/* ★ 수정: 단어장 usage_note (추가 설명란) 복구 ★ */}
                         <div className="bg-white rounded-2xl md:rounded-3xl p-6 md:p-8 shadow-sm border border-slate-100">
                           <h2 className="text-4xl md:text-5xl font-black text-slate-900 mb-2 korean-text">{activeWord.word}</h2>
                           <p className="text-lg md:text-xl text-slate-500 font-medium mb-4">{activeWord.meaning}</p>
                           <button onClick={() => playAudio(getAudioUrl(activeWord.id), 'word', activeWord.id)} className="w-12 h-12 bg-slate-50 rounded-full flex items-center justify-center text-slate-400 hover:bg-purple-600 hover:text-white transition-all shadow-inner mb-4"><Volume2 size={20} /></button>
-                          {activeWord.usage_note && (<div className="p-4 bg-purple-50/50 rounded-xl border border-purple-100/50 text-[11px] md:text-xs text-purple-800 leading-relaxed korean-text font-medium"><span className="font-bold underline">Note:</span> {activeWord.usage_note}</div>)}
+                          {activeWord.usage_note && (
+                            <div className="p-4 bg-purple-50/50 rounded-xl border border-purple-100/50 text-[11px] md:text-xs text-purple-800 leading-relaxed korean-text font-medium">
+                              <span className="font-bold underline">Note:</span> {activeWord.usage_note}
+                            </div>
+                          )}
                         </div>
                         <div className="bg-purple-600 rounded-2xl md:rounded-3xl p-6 md:p-10 text-white shadow-xl min-h-[250px] md:min-h-[300px] flex flex-col justify-center relative overflow-hidden"><span className="text-white/50 text-[10px] font-bold uppercase tracking-widest block mb-4">Pattern {currentExIdx + 1}: {activeWord.examples[currentExIdx]?.type}</span><h3 className="text-2xl md:text-4xl font-bold mb-4 korean-text break-keep leading-snug">{activeWord.examples[currentExIdx]?.ko}</h3><p className="text-white/70 text-base md:text-lg mb-8 md:mb-10 font-medium italic">{activeWord.examples[currentExIdx]?.en}</p><button onClick={() => playAudio(getAudioUrl(activeWord.id, currentExIdx), 'example', `${activeWord.id}_${currentExIdx}`)} className="w-14 h-14 md:w-16 md:h-16 bg-white text-purple-600 rounded-full flex items-center justify-center shadow-lg hover:scale-110 active:scale-95 transition-transform"><Volume2 size={28} className="fill-current" /></button></div>
                       </div>
@@ -548,6 +762,7 @@ const App = () => {
         </div>
       </div>
       
+{/* ★ 2. Issue 2 & 스타일/플립 증발 해결 ★ */}
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Lexend:wght@400;600;900&family=Noto+Sans+KR:wght@400;700;900&display=swap');
         @import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght@100..700&display=swap');
@@ -556,9 +771,37 @@ const App = () => {
         .korean-text { font-family: 'Noto Sans KR', sans-serif; }
         .custom-scrollbar::-webkit-scrollbar { width: 6px; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
-        .material-symbols-outlined { text-transform: none !important; font-family: 'Material Symbols Outlined' !important; font-feature-settings: "liga" !important; font-variant-ligatures: normal !important; white-space: nowrap !important; letter-spacing: normal !important; } 
-        .text-bori-primary { color: #f59e0b !important; } .bg-bori-primary { background-color: #f59e0b !important; } .border-bori-primary { border-color: #f59e0b !important; } .text-bori-secondary { color: #3b82f6 !important; } .bg-bori-secondary { background-color: #3b82f6 !important; } .border-bori-secondary { border-color: #3b82f6 !important; } .bg-bori-light { background-color: #fffbeb !important; } .text-tk-primary { color: #526ae5 !important; } .bg-tk-primary { background-color: #526ae5 !important; } .border-tk-primary { border-color: #526ae5 !important; } .bg-tk-primary\\/5 { background-color: rgba(82, 106, 229, 0.05) !important; } .rounded-tk { border-radius: 1.5rem !important; }
-        .flip-card { perspective: 1000px !important; } .flip-card-inner { transition: transform 0.6s !important; transform-style: preserve-3d !important; position: relative !important; width: 100% !important; height: 100% !important; } .flip-card-front, .flip-card-back { backface-visibility: hidden !important; -webkit-backface-visibility: hidden !important; position: absolute !important; top: 0 !important; left: 0 !important; width: 100% !important; height: 100% !important; } .flip-card.flipped .flip-card-inner { transform: rotateY(180deg) !important; } .flip-card-back { transform: rotateY(180deg) !important; }
+        
+        /* 아이콘 텍스트 깨짐 방어 */
+        .material-symbols-outlined { 
+          text-transform: none !important; 
+          font-family: 'Material Symbols Outlined' !important;
+          font-feature-settings: "liga" !important;
+          font-variant-ligatures: normal !important;
+          white-space: nowrap !important;
+          letter-spacing: normal !important;
+        } 
+
+        /* 삭제된 컬러 강제 복구 */
+        .text-bori-primary { color: #f59e0b !important; }
+        .bg-bori-primary { background-color: #f59e0b !important; }
+        .border-bori-primary { border-color: #f59e0b !important; }
+        .text-bori-secondary { color: #3b82f6 !important; }
+        .bg-bori-secondary { background-color: #3b82f6 !important; }
+        .border-bori-secondary { border-color: #3b82f6 !important; }
+        .bg-bori-light { background-color: #fffbeb !important; }
+        .text-tk-primary { color: #526ae5 !important; }
+        .bg-tk-primary { background-color: #526ae5 !important; }
+        .border-tk-primary { border-color: #526ae5 !important; }
+        .bg-tk-primary\\/5 { background-color: rgba(82, 106, 229, 0.05) !important; }
+        .rounded-tk { border-radius: 1.5rem !important; }
+        
+        /* 카드 플립 애니메이션 핵심 엔진 복구 */
+        .flip-card { perspective: 1000px !important; }
+        .flip-card-inner { transition: transform 0.6s !important; transform-style: preserve-3d !important; position: relative !important; width: 100% !important; height: 100% !important; }
+        .flip-card-front, .flip-card-back { backface-visibility: hidden !important; -webkit-backface-visibility: hidden !important; position: absolute !important; top: 0 !important; left: 0 !important; width: 100% !important; height: 100% !important; }
+        .flip-card.flipped .flip-card-inner { transform: rotateY(180deg) !important; }
+        .flip-card-back { transform: rotateY(180deg) !important; }
       `}</style>
     </div>
   );
