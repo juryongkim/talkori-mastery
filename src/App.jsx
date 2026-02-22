@@ -93,6 +93,15 @@ const App = () => {
   };
   const toggleSpeed = () => setPlaybackRate(prev => (prev === 1.0 ? 0.8 : prev === 0.8 ? 0.6 : 1.0));
 
+// ★ 추가: 앱 나가기 (아이프레임 부모에게 신호 보내기)
+  const handleExit = () => {
+    if (isDemoMode) {
+        window.parent.location.href = SALES_PAGE_URL;
+    } else {
+        window.parent.postMessage('exit_talkori', '*');
+    }
+  };
+
   const getChapterProgress = (chapter) => {
     if (!chapter || !chapter.words) return 0;
     let totalItems = 0; let completedItems = 0;
@@ -103,19 +112,122 @@ const App = () => {
     return totalItems === 0 ? 0 : Math.round((completedItems / totalItems) * 100);
   };
 
-  const GuideBook = () => (
-    <div className="flex-1 overflow-y-auto bg-white custom-scrollbar">
-      <header className="flex items-center justify-between p-6 md:hidden sticky top-0 bg-white/90 backdrop-blur-sm z-10 border-b border-slate-100"><button onClick={() => setIsSidebarOpen(true)} className="p-2 bg-slate-50 rounded-lg shadow-sm mr-4"><Menu size={20}/></button><h2 className="text-lg font-bold text-slate-900">Start Guide</h2><div className="w-10"></div></header>
-      <div className="max-w-5xl mx-auto px-6 py-10 md:py-16 space-y-20">
-        <section className="text-center animate-in slide-in-from-bottom-4 duration-500">
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-orange-100 text-orange-700 text-xs font-bold uppercase tracking-wider mb-6"><HelpCircle size={14} /> Why can't I speak?</div>
-          <h1 className="text-4xl md:text-5xl font-black text-slate-900 mb-6 leading-tight">You know the words.<br/><span className="text-[#3713ec]">So why do you freeze?</span></h1>
-          <p className="text-lg text-slate-500 max-w-2xl mx-auto leading-relaxed">Stop memorizing lists like <span className="font-bold bg-slate-100 px-2 py-0.5 rounded text-slate-700">Delicious = 맛있다</span>.<br className="hidden md:block"/> Real conversations don't happen in single words.</p>
-        </section>
-        <div className="text-center pb-10 animate-in slide-in-from-bottom-4 duration-700 delay-500"><button onClick={() => setShowGuideMain(false)} className="w-full md:w-auto px-12 py-5 bg-[#3713ec] text-white text-lg font-bold rounded-2xl shadow-xl shadow-[#3713ec]/30 hover:scale-105 hover:bg-[#2a0eb5] transition-all flex items-center justify-center gap-3">Start Day 1 Now <ArrowLeft className="rotate-180" size={20}/></button></div>
+  // --- 가이드북 컴포넌트 ---
+  const GuideBook = () => {
+    return (
+      <div className="flex-1 overflow-y-auto bg-white custom-scrollbar">
+        <header className="flex items-center justify-between p-6 md:hidden sticky top-0 bg-white/90 backdrop-blur-sm z-10 border-b border-slate-100">
+          <button onClick={() => setIsSidebarOpen(true)} className="p-2 bg-slate-50 rounded-lg shadow-sm mr-4"><Menu size={20}/></button>
+          <h2 className="text-lg font-bold text-slate-900">Start Guide</h2>
+          <div className="w-10"></div>
+        </header>
+
+        <div className="max-w-5xl mx-auto px-6 py-10 md:py-16 space-y-20">
+          <section className="text-center animate-in slide-in-from-bottom-4 duration-500">
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-orange-100 text-orange-700 text-xs font-bold uppercase tracking-wider mb-6">
+              <HelpCircle size={14} /> Why can't I speak?
+            </div>
+            <h1 className="text-4xl md:text-5xl font-black text-slate-900 mb-6 leading-tight">
+              You know the words.<br/>
+              <span className="text-[#3713ec]">So why do you freeze?</span>
+            </h1>
+            <p className="text-lg text-slate-500 max-w-2xl mx-auto leading-relaxed">
+              Stop memorizing lists like <span className="font-bold bg-slate-100 px-2 py-0.5 rounded text-slate-700">Delicious = 맛있다</span>.
+              <br className="hidden md:block"/> Real conversations don't happen in single words.
+            </p>
+          </section>
+
+          <section className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-8 animate-in slide-in-from-bottom-4 duration-700 delay-100">
+            <div className="bg-slate-50 p-8 rounded-3xl border border-slate-100 flex flex-col items-center text-center opacity-70 grayscale transition-all hover:grayscale-0 hover:opacity-100 group">
+              <div className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">The Old Way</div>
+              <div className="text-3xl font-bold text-slate-400 mb-2 line-through decoration-red-400 decoration-4 group-hover:text-slate-600 transition-colors">Delicious</div>
+              <p className="text-sm text-slate-400">Just a frozen word. <br/>You can't use this in real life.</p>
+            </div>
+            <div className="bg-[#3713ec] p-8 rounded-3xl shadow-xl shadow-[#3713ec]/20 flex flex-col items-center text-center relative overflow-hidden group">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16 blur-2xl"></div>
+              <div className="text-xs font-bold text-white/60 uppercase tracking-widest mb-4">The Matrix Way</div>
+              <div className="space-y-2 mb-4 relative z-10">
+                <div className="bg-white/10 px-4 py-2 rounded-lg text-white font-bold text-lg">"Is this delicious?" <span className="text-xs font-normal opacity-70 ml-2">(Question)</span></div>
+                <div className="bg-white/10 px-4 py-2 rounded-lg text-white font-bold text-lg">"It wasn't delicious." <span className="text-xs font-normal opacity-70 ml-2">(Past)</span></div>
+              </div>
+              <p className="text-sm text-white/80">We give you <span className="font-bold text-white border-b border-white/40">10 real sentences</span> for every word.</p>
+            </div>
+          </section>
+
+          <section className="animate-in slide-in-from-bottom-4 duration-700 delay-200">
+             <div className="text-center mb-10">
+                <h2 className="text-2xl font-bold text-slate-900 mb-4">Your 45-Day Journey</h2>
+                <p className="text-slate-500 max-w-2xl mx-auto leading-relaxed text-sm md:text-base">
+                  "Talkori guides you from your room (Day 1) to the heart of Korean society (Day 45). <br className="hidden md:block"/>Expand your world one word at a time."
+                </p>
+             </div>
+             
+             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 relative">
+                <div className="hidden md:block absolute top-12 left-0 w-full h-0.5 bg-gradient-to-r from-blue-200 via-indigo-200 to-purple-200 -z-10"></div>
+                <div className="bg-white p-6 rounded-2xl border border-blue-100 shadow-sm relative hover:-translate-y-1 transition-transform">
+                   <div className="w-10 h-10 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold text-sm mb-4 border-4 border-white">01</div>
+                   <div className="text-xs font-bold text-blue-500 uppercase tracking-widest mb-1">Day 1 ~ 15</div>
+                   <h3 className="font-bold text-lg text-slate-900 mb-2">Survival & Intuition</h3>
+                   <p className="text-sm text-slate-500 leading-relaxed">
+                     <span className="font-bold text-slate-700">"Me & My Home"</span><br/>
+                     Focus on concrete nouns you can see and touch. Basic survival words like family, body, and food.
+                   </p>
+                </div>
+                <div className="bg-white p-6 rounded-2xl border border-indigo-100 shadow-sm relative hover:-translate-y-1 transition-transform">
+                   <div className="w-10 h-10 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center font-bold text-sm mb-4 border-4 border-white">02</div>
+                   <div className="text-xs font-bold text-indigo-500 uppercase tracking-widest mb-1">Day 16 ~ 30</div>
+                   <h3 className="font-bold text-lg text-slate-900 mb-2">Society & Action</h3>
+                   <p className="text-sm text-slate-500 leading-relaxed">
+                     <span className="font-bold text-slate-700">"The City"</span><br/>
+                     Step outside. Use transport, banks, and shops. Start using verbs and expressing emotions.
+                   </p>
+                </div>
+                <div className="bg-white p-6 rounded-2xl border border-purple-100 shadow-sm relative hover:-translate-y-1 transition-transform">
+                   <div className="w-10 h-10 bg-purple-100 text-purple-600 rounded-full flex items-center justify-center font-bold text-sm mb-4 border-4 border-white">03</div>
+                   <div className="text-xs font-bold text-purple-500 uppercase tracking-widest mb-1">Day 31 ~ 45</div>
+                   <h3 className="font-bold text-lg text-slate-900 mb-2">Connection & Mastery</h3>
+                   <p className="text-sm text-slate-500 leading-relaxed">
+                     <span className="font-bold text-slate-700">"Deep Talk"</span><br/>
+                     Master logic, abstract ideas, and polite manners (Honorifics). Complete your Korean nuance.
+                   </p>
+                </div>
+             </div>
+          </section>
+
+          <section className="animate-in slide-in-from-bottom-4 duration-700 delay-300">
+             <h2 className="text-2xl font-bold text-center text-slate-900 mb-10">How to Study?</h2>
+             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="p-6 rounded-2xl bg-slate-50 hover:bg-white border border-transparent hover:border-slate-200 hover:shadow-lg transition-all group">
+                  <div className="w-10 h-10 bg-white text-[#3713ec] rounded-lg shadow-sm flex items-center justify-center mb-4 group-hover:scale-110 transition-transform"><Map size={20} /></div>
+                  <h3 className="font-bold text-base text-slate-900 mb-1">1. The Context</h3>
+                  <p className="text-xs text-slate-500 leading-relaxed">Don't learn in a void. Every word starts in a real situation—like a convenience store or a blind date.</p>
+                </div>
+                <div className="p-6 rounded-2xl bg-slate-50 hover:bg-white border border-transparent hover:border-slate-200 hover:shadow-lg transition-all group">
+                  <div className="w-10 h-10 bg-white text-purple-600 rounded-lg shadow-sm flex items-center justify-center mb-4 group-hover:scale-110 transition-transform"><LayoutGrid size={20} /></div>
+                  <h3 className="font-bold text-base text-slate-900 mb-1">2. The Matrix</h3>
+                  <p className="text-xs text-slate-500 leading-relaxed">Expand one word into 10 expressions. Practice questions, past tense, and even casual "Banmal".</p>
+                </div>
+                <div className="p-6 rounded-2xl bg-slate-50 hover:bg-white border border-transparent hover:border-slate-200 hover:shadow-lg transition-all group">
+                  <div className="w-10 h-10 bg-white text-pink-600 rounded-lg shadow-sm flex items-center justify-center mb-4 group-hover:scale-110 transition-transform"><Waves size={20} /></div>
+                  <h3 className="font-bold text-base text-slate-900 mb-1">3. The Waveform</h3>
+                  <p className="text-xs text-slate-500 leading-relaxed">Listen to the native audio pattern and shadow it until your voice matches the rhythm perfectly.</p>
+                </div>
+             </div>
+          </section>
+
+          <div className="text-center pb-10 animate-in slide-in-from-bottom-4 duration-700 delay-500">
+            <p className="text-slate-400 font-medium mb-6 text-sm">Ready to turn the words you "know" into words you can "speak"?</p>
+            <button 
+              onClick={() => setShowGuideMain(false)} 
+              className="w-full md:w-auto px-12 py-5 bg-[#3713ec] text-white text-lg font-bold rounded-2xl shadow-xl shadow-[#3713ec]/30 hover:scale-105 hover:bg-[#2a0eb5] transition-all flex items-center justify-center gap-3"
+            >
+              Start Day 1 Now <ArrowLeft className="rotate-180" size={20}/>
+            </button>
+          </div>
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   // ==========================================
   // [강의실 상태 및 로직] 
@@ -331,26 +443,34 @@ const App = () => {
       {/* 2. 메인 화면 영역 */}
       <div className="flex-1 flex flex-col h-full relative overflow-x-hidden">
         
-        {/* ★ 모바일 상단 네비게이션: 배달의민족 스타일 (Pill Toggle) 교체 ★ */}
-        <nav className="h-16 bg-white border-b border-slate-100 flex items-center justify-between md:justify-center px-4 md:px-6 shrink-0 z-40 relative">
-          <button onClick={() => setIsSidebarOpen(true)} className="md:hidden p-2 text-slate-500 hover:text-slate-800"><Menu size={24}/></button>
-          
-          {/* Pill Toggle Switch */}
-          <div className="flex bg-slate-100 p-1 rounded-full relative w-48 md:w-64">
-            {/* 움직이는 배경 슬라이더 */}
-            <div 
-              className={`absolute top-1 bottom-1 w-[calc(50%-4px)] rounded-full transition-transform duration-300 ease-out shadow-sm ${appMode === 'class' ? 'translate-x-0 bg-[#3713ec]' : 'translate-x-[calc(100%+8px)] bg-purple-600'}`}
-            ></div>
-            
-            <button onClick={() => { setAppMode('class'); stopCurrentAudio(); }} className={`relative z-10 flex-1 py-1.5 md:py-2 text-[10px] md:text-xs font-black uppercase transition-colors flex items-center justify-center gap-1.5 ${appMode === 'class' ? 'text-white' : 'text-slate-500 hover:text-slate-800'}`}>
-              <MonitorPlay size={14} /> Class
-            </button>
-            <button onClick={() => { setAppMode('voca'); stopCurrentAudio(); }} className={`relative z-10 flex-1 py-1.5 md:py-2 text-[10px] md:text-xs font-black uppercase transition-colors flex items-center justify-center gap-1.5 ${appMode === 'voca' ? 'text-white' : 'text-slate-500 hover:text-slate-800'}`}>
-              <BookA size={14} /> Voca
-            </button>
+{/* ★ 수정: 글로벌 컨트롤 (속도 조절 & 나가기 버튼) 최상단 통합 ★ */}
+        <nav className="h-16 bg-white border-b border-slate-100 flex items-center justify-between px-4 md:px-6 shrink-0 z-40 relative">
+          <div className="flex items-center gap-2 w-1/4 md:w-1/3">
+            <button onClick={() => setIsSidebarOpen(true)} className="md:hidden p-2 text-slate-500 hover:text-slate-800"><Menu size={24}/></button>
           </div>
           
-          <div className="w-10 md:hidden"></div> {/* 우측 밸런스용 빈 공간 */}
+          {/* Pill Toggle Switch */}
+          <div className="flex justify-center flex-1 md:w-1/3">
+            <div className="flex bg-slate-100 p-1 rounded-full relative w-48 md:w-64">
+              <div className={`absolute top-1 bottom-1 w-[calc(50%-4px)] rounded-full transition-transform duration-300 ease-out shadow-sm ${appMode === 'class' ? 'translate-x-0 bg-[#3713ec]' : 'translate-x-[calc(100%+8px)] bg-purple-600'}`}></div>
+              <button onClick={() => { setAppMode('class'); stopCurrentAudio(); }} className={`relative z-10 flex-1 py-1.5 md:py-2 text-[10px] md:text-xs font-black uppercase transition-colors flex items-center justify-center gap-1.5 ${appMode === 'class' ? 'text-white' : 'text-slate-500 hover:text-slate-800'}`}><MonitorPlay size={14} /> Class</button>
+              <button onClick={() => { setAppMode('voca'); stopCurrentAudio(); }} className={`relative z-10 flex-1 py-1.5 md:py-2 text-[10px] md:text-xs font-black uppercase transition-colors flex items-center justify-center gap-1.5 ${appMode === 'voca' ? 'text-white' : 'text-slate-500 hover:text-slate-800'}`}><BookA size={14} /> Voca</button>
+            </div>
+          </div>
+          
+          {/* 우측 글로벌 컨트롤 (속도 조절 & 나가기) */}
+          <div className="flex items-center justify-end gap-1 md:gap-3 w-1/4 md:w-1/3">
+            <button onClick={toggleSpeed} className={`flex items-center gap-1 px-2 md:px-3 py-1.5 rounded-full text-[10px] md:text-xs font-bold transition-colors ${appMode === 'voca' ? 'bg-purple-600/10 text-purple-600' : 'bg-[#3713ec]/10 text-[#3713ec]'}`}>
+              <Gauge size={14} /> <span className="hidden sm:inline">{playbackRate}x</span><span className="sm:hidden">{playbackRate}</span>
+            </button>
+            <button onClick={handleExit} className="p-2 text-slate-400 hover:text-red-500 transition-colors hidden sm:block">
+              {isDemoMode ? <Sparkles size={18}/> : <LogOut size={18}/>}
+            </button>
+            {/* 모바일용 미니 나가기 버튼 */}
+            <button onClick={handleExit} className="p-1.5 text-slate-400 hover:text-red-500 transition-colors sm:hidden">
+              <LogOut size={16}/>
+            </button>
+          </div>
         </nav>
 
         <div className="flex-1 overflow-y-auto custom-scrollbar relative bg-white md:bg-transparent">
@@ -436,7 +556,11 @@ const App = () => {
                           selectedLesson.script.map((line, idx) => (
                             <div key={idx} className="flex items-center gap-3 md:gap-4 p-4 md:p-6 bg-white hover:bg-blue-50/50 border border-slate-100 hover:border-blue-200 rounded-2xl transition-all shadow-sm group">
                               <button onClick={() => { const audioUrl = `${CLASS_AUDIO_BASE_URL}/${line.audio}`; playAudio(audioUrl, 'class', `${selectedLesson.lesson_id}_${idx}`); }} className="w-10 h-10 md:w-12 md:h-12 shrink-0 rounded-full bg-slate-50 border border-slate-200 text-slate-400 flex items-center justify-center group-hover:bg-[#3713ec] group-hover:text-white group-hover:border-[#3713ec] transition-all shadow-sm"><Volume2 size={18} /></button>
-                              <div className="flex-1"><span className="text-[10px] font-bold text-[#3713ec] uppercase tracking-wider mb-1 block">{line.type || `Pattern ${idx + 1}`}</span><p className="text-base md:text-lg font-bold text-slate-800 korean-text leading-snug break-keep">{line.ko}</p><p className="text-xs md:text-sm text-slate-500 mt-1 italic">{line.en}</p></div>
+                              <div className="flex-1">
+  {line.type && <span className="text-[10px] font-bold text-[#3713ec] uppercase tracking-wider mb-1 block">{line.type}</span>}
+  <p className="text-base md:text-lg font-bold text-slate-800 korean-text leading-snug break-keep">{line.ko}</p>
+  <p className="text-xs md:text-sm text-slate-500 mt-1 italic">{line.en}</p>
+</div>
                             </div>
                           ))
                         ) : (<div className="flex flex-col items-center justify-center h-[400px] text-slate-400"><Mic size={48} className="mb-4 opacity-30"/><p className="font-bold text-sm">오디오 스크립트가 아직 등록되지 않았습니다.</p></div>)}
@@ -479,11 +603,25 @@ const App = () => {
                 </div>
               ) : (
                 <div className="flex-1 flex flex-col overflow-hidden bg-[#f6f6f8] animate-in fade-in duration-300">
-                  <header className="bg-white border-b border-slate-200 px-4 md:px-6 py-3 md:py-4 flex justify-between items-center shrink-0"><button onClick={() => setActiveWord(null)} className="flex items-center gap-2 text-slate-500 font-bold text-xs md:text-sm hover:text-purple-600 transition-all"><ArrowLeft size={16} /> Back</button><div className="flex items-center gap-4"><button onClick={toggleSpeed} className="flex items-center gap-1 bg-purple-600/10 px-3 py-1.5 rounded-full text-xs font-bold text-purple-600"><Gauge size={14} /> {playbackRate}x</button></div></header>
+<header className="bg-white border-b border-slate-200 px-4 md:px-6 py-3 md:py-4 flex justify-between items-center shrink-0">
+  <button onClick={() => setActiveWord(null)} className="flex items-center gap-2 text-slate-500 font-bold text-xs md:text-sm hover:text-purple-600 transition-all">
+    <ArrowLeft size={16} /> Back
+  </button>
+</header>
                   <main className="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar">
                     <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6 md:gap-8 items-start">
-                      <div className="lg:col-span-5 space-y-4 md:space-y-6">
-                        <div className="bg-white rounded-2xl md:rounded-3xl p-6 md:p-8 shadow-sm border border-slate-100"><h2 className="text-4xl md:text-5xl font-black text-slate-900 mb-2 korean-text">{activeWord.word}</h2><p className="text-lg md:text-xl text-slate-500 font-medium mb-6">{activeWord.meaning}</p><button onClick={() => playAudio(getAudioUrl(activeWord.id), 'word', activeWord.id)} className="w-12 h-12 bg-slate-50 rounded-full flex items-center justify-center text-slate-400 hover:bg-purple-600 hover:text-white transition-all shadow-inner"><Volume2 size={20} /></button></div>
+<div className="lg:col-span-5 space-y-4 md:space-y-6">
+                        {/* ★ 수정: 단어장 usage_note (추가 설명란) 복구 ★ */}
+                        <div className="bg-white rounded-2xl md:rounded-3xl p-6 md:p-8 shadow-sm border border-slate-100">
+                          <h2 className="text-4xl md:text-5xl font-black text-slate-900 mb-2 korean-text">{activeWord.word}</h2>
+                          <p className="text-lg md:text-xl text-slate-500 font-medium mb-4">{activeWord.meaning}</p>
+                          <button onClick={() => playAudio(getAudioUrl(activeWord.id), 'word', activeWord.id)} className="w-12 h-12 bg-slate-50 rounded-full flex items-center justify-center text-slate-400 hover:bg-purple-600 hover:text-white transition-all shadow-inner mb-4"><Volume2 size={20} /></button>
+                          {activeWord.usage_note && (
+                            <div className="p-4 bg-purple-50/50 rounded-xl border border-purple-100/50 text-[11px] md:text-xs text-purple-800 leading-relaxed korean-text font-medium">
+                              <span className="font-bold underline">Note:</span> {activeWord.usage_note}
+                            </div>
+                          )}
+                        </div>
                         <div className="bg-purple-600 rounded-2xl md:rounded-3xl p-6 md:p-10 text-white shadow-xl min-h-[250px] md:min-h-[300px] flex flex-col justify-center relative overflow-hidden"><span className="text-white/50 text-[10px] font-bold uppercase tracking-widest block mb-4">Pattern {currentExIdx + 1}: {activeWord.examples[currentExIdx]?.type}</span><h3 className="text-2xl md:text-4xl font-bold mb-4 korean-text break-keep leading-snug">{activeWord.examples[currentExIdx]?.ko}</h3><p className="text-white/70 text-base md:text-lg mb-8 md:mb-10 font-medium italic">{activeWord.examples[currentExIdx]?.en}</p><button onClick={() => playAudio(getAudioUrl(activeWord.id, currentExIdx), 'example', `${activeWord.id}_${currentExIdx}`)} className="w-14 h-14 md:w-16 md:h-16 bg-white text-purple-600 rounded-full flex items-center justify-center shadow-lg hover:scale-110 active:scale-95 transition-transform"><Volume2 size={28} className="fill-current" /></button></div>
                       </div>
                       <div className="lg:col-span-7 bg-white rounded-2xl md:rounded-3xl shadow-sm border border-slate-100 flex flex-col h-full lg:max-h-[650px] overflow-hidden">
