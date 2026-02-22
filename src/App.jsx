@@ -217,6 +217,36 @@ const App = () => {
     return totalItems === 0 ? 0 : Math.round((completedItems / totalItems) * 100);
   };
 
+  // ==========================================
+  // ★ 수술 부위: 스마트폰 물리적 뒤로 가기 버튼 완벽 지원 ★
+  // ==========================================
+  useEffect(() => {
+    // 단어를 클릭하거나 모바일에서 강의를 눌렀을 때, 브라우저에 '가짜 방문 기록'을 하나 밀어 넣습니다.
+    if (activeWord || (selectedLesson && !isSidebarOpen && isMobile)) {
+      window.history.pushState({ opened: true }, '', window.location.href);
+    }
+  }, [activeWord, selectedLesson, isSidebarOpen, isMobile]);
+
+  useEffect(() => {
+    const handleHardwareBack = (e) => {
+      // 스마트폰 뒤로 가기 버튼이 눌렸을 때, 현재 열려있는 화면에 따라 똑똑하게 닫아줍니다.
+      if (activeWord) {
+        setActiveWord(null); // 단어 상세화면 닫기
+      } else if (selectedLesson && !isSidebarOpen && isMobile) {
+        setIsSidebarOpen(true); // 모바일 강의실: 화면 닫고 좌측 강의 목록(사이드바) 다시 열기
+      } else if (!showGuideMain && appMode === 'voca') {
+        setShowGuideMain(true); // 단어장: 챕터 목록 닫고 초기 가이드북 화면으로
+      } else if (isSidebarOpen && isMobile) {
+        setIsSidebarOpen(false); // 메뉴 열려있으면 메뉴 닫기
+      }
+    };
+
+    // 브라우저의 뒤로 가기 신호(popstate)를 감지하는 리스너를 답니다.
+    window.addEventListener('popstate', handleHardwareBack);
+    return () => window.removeEventListener('popstate', handleHardwareBack);
+  }, [activeWord, selectedLesson, isSidebarOpen, showGuideMain, appMode, isMobile]);
+  // ==========================================
+
   // --- 가이드북 컴포넌트 ---
   const GuideBook = () => {
     return (
