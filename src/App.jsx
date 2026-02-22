@@ -31,8 +31,7 @@ const App = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 const isMobile = windowWidth <= 768;
-  const [numPages, setNumPages] = useState(null);
-  const [visiblePages, setVisiblePages] = useState(3); // ★ 이 줄을 추가하세요!
+
 
   // 웹 교재(HTML) 영역 참조
   const webContentRef = useRef(null);
@@ -152,12 +151,7 @@ const isMobile = windowWidth <= 768;
     setContentTab('pdf');
   }, [selectedLesson]);
 
-// ★ 1. PDF 주소 자동 변환 로직 (특수문자/띄어쓰기 에러 방어) ★
-  const getConvertedPdfUrl = (url) => {
-    if (!url) return null;
-    const fileName = url.split('/').pop(); 
-    return `${PDF_CDN_BASE_URL}/${encodeURIComponent(fileName)}`; 
-  };
+
 
 // ★ 1. 완벽 해결: 퀴즈 전역 함수 유지 + 토글 예외사항(1, 5강) 스마트 감지 ★
   useEffect(() => {
