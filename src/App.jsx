@@ -163,69 +163,68 @@ const App = () => {
     return `${PDF_CDN_BASE_URL}/${fileName}`; // 버니넷 주소로 조립
   };
 
-  // ★ 2. 완벽한 이벤트 감지(Event Delegation) 로직 ★
+// ★ 2. Issue 1 해결: 정확한 HTML 타겟팅 이벤트 위임 로직 ★
   useEffect(() => {
     if (appMode !== 'class' || contentTab !== 'pdf' || !webContentRef.current) return;
     const container = webContentRef.current;
 
     const handleWebClick = (e) => {
-      // 1) 플립카드 뒤집기 감지
+      // A. 플립카드 뒤집기 감지
       const flipCard = e.target.closest('.flip-card');
-      if (flipCard) flipCard.classList.toggle('flipped');
+      if (flipCard) {
+        flipCard.classList.toggle('flipped');
+        return; 
+      }
 
-      // 2) 퀴즈 옵션 버튼 감지
+      // B. 퀴즈 옵션 버튼 감지 (opt-1, mark-1 구조 완벽 대응)
       const quizOption = e.target.closest('.quiz-option');
       if (quizOption) {
+        // ID에서 번호 추출 (예: 'opt-1' -> '1')
+        const idMatch = quizOption.id.match(/opt-(\d+)/);
+        if (!idMatch) return;
+        const num = idMatch[1];
+
+        // 정답 여부 확인 (onclick="checkQuiz(1, true)" 에서 true 추출)
         const onclickAttr = quizOption.getAttribute('onclick') || '';
         const isCorrect = onclickAttr.includes('true'); 
-        const feedbackMatch = onclickAttr.match(/'([^']+)'/);
-        const feedbackId = feedbackMatch ? feedbackMatch[1] : 'feedback-nuance';
 
-        const parent = quizOption.closest('.flex-col');
-        if (parent) {
-          parent.querySelectorAll('.quiz-option').forEach(o => {
-            o.style.borderColor = "#fff"; o.style.backgroundColor = "#fff"; o.style.color = "#334155";
-          });
-        }
+        // 1. 모든 옵션 초기화 (기존 클래스 제거 및 O/X 마크 숨김)
+        container.querySelectorAll('.quiz-option').forEach(el => {
+          el.classList.remove('active-correct', 'active-wrong');
+          const markSpan = el.querySelector('span:last-child');
+          if (markSpan) markSpan.style.opacity = "0";
+        });
 
-        const resultText = document.getElementById('feedback-result');
+        // 2. 선택된 옵션 스타일 적용
+        const mark = container.querySelector('#mark-' + num);
         if (isCorrect) {
-          quizOption.style.borderColor = "#22c55e"; quizOption.style.backgroundColor = "#f0fdf4"; quizOption.style.color = "#15803d";
-          if (resultText) { resultText.innerText = "✅ Correct!"; resultText.style.color = "#22c55e"; }
+          quizOption.classList.add('active-correct');
         } else {
-          quizOption.style.borderColor = "#ef4444"; quizOption.style.backgroundColor = "#fef2f2"; quizOption.style.color = "#b91c1c";
-          if (resultText) { resultText.innerText = "❌ Try Again!"; resultText.style.color = "#ef4444"; }
+          quizOption.classList.add('active-wrong');
         }
-        
-        const feedbackArea = document.getElementById(feedbackId);
+        if (mark) mark.style.opacity = "1";
+
+        // 3. 피드백 창 띄우기
+        const feedbackArea = container.querySelector('#quiz-feedback');
         if (feedbackArea) feedbackArea.classList.remove('hidden');
       }
     };
 
     const handleWebChange = (e) => {
-      // 3) 토글 스위치 감지 (정규식으로 숫자 id 추출하여 만능 연결)
+      // C. 토글 스위치 감지 (switch-1, kor-1 구조 완벽 대응)
       if (e.target.matches('.tk-switch input[type="checkbox"]')) {
         const sw = e.target;
-        const idMatch = sw.id.match(/\d+/);
+        // ID에서 번호 추출 (예: 'switch-1' -> '1')
+        const idMatch = sw.id.match(/switch-(\d+)/);
         if (!idMatch) return;
-        const id = idMatch[0];
+        const id = idMatch[1];
         
-        const korText = document.getElementById('kor-' + id);
-        const engText = document.getElementById('eng-' + id);
-        
+        const korText = container.querySelector('#kor-' + id);
         if (korText) {
           const isChecked = sw.checked;
-          const opt1 = korText.getAttribute('data-base') || korText.getAttribute('data-opt1');
-          const opt2 = korText.getAttribute('data-transformed') || korText.getAttribute('data-opt2');
-          if (opt1 && opt2) {
-            korText.innerText = isChecked ? opt2 : opt1;
-            korText.style.color = isChecked ? '#526ae5' : '#1e293b';
-          }
-        }
-        if (engText) {
-          const eng1 = engText.getAttribute('data-eng1');
-          const eng2 = engText.getAttribute('data-eng2');
-          if (eng1 && eng2) engText.innerText = sw.checked ? eng2 : eng1;
+          // data-transformed 와 data-base 값을 가져와 치환
+          korText.innerText = isChecked ? korText.getAttribute('data-transformed') : korText.getAttribute('data-base');
+          korText.style.color = isChecked ? '#526ae5' : '#1e293b';
         }
       }
     };
@@ -475,11 +474,14 @@ const App = () => {
         .korean-text { font-family: 'Noto Sans KR', sans-serif; }
         .custom-scrollbar::-webkit-scrollbar { width: 6px; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
-        .material-symbols-outlined { 
+.material-symbols-outlined { 
           text-transform: none !important; 
           font-family: 'Material Symbols Outlined' !important;
+          font-feature-settings: "liga" !important;
+          font-variant-ligatures: normal !important;
+          white-space: nowrap !important;
           letter-spacing: normal !important;
-        } 
+        }
       `}</style>
     </div>
   );
