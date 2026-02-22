@@ -163,50 +163,22 @@ const App = () => {
     return `${PDF_CDN_BASE_URL}/${fileName}`; // 버니넷 주소로 조립
   };
 
-// ★ 1. 근본적 해결: 워드프레스 함수들을 브라우저(window) 전역에 직접 주입 ★
+// ★ 1. 완벽 해결: 퀴즈 전역 함수 유지 + 토글 스위치 강제 감지 ★
   useEffect(() => {
-    // 1. Must Know 코스: 토글 스위치 (신버전)
-    window.toggleVibe = (id) => {
-      const isChecked = document.getElementById('switch-' + id)?.checked;
-      const korText = document.getElementById('kor-' + id);
-      const engText = document.getElementById('eng-' + id);
-      
-      if (korText) {
-        korText.innerText = isChecked ? korText.getAttribute('data-opt2') : korText.getAttribute('data-opt1');
-        korText.style.color = isChecked ? '#526ae5' : '#1e293b';
-      }
-      if (engText) {
-        engText.innerText = isChecked ? engText.getAttribute('data-eng2') : engText.getAttribute('data-eng1');
-      }
-    };
+    if (appMode !== 'class' || contentTab !== 'pdf' || !webContentRef.current) return;
+    const container = webContentRef.current;
 
-    // 2. Must Know 코스: 토글 스위치 (구버전)
-    window.toggleVerb = (id) => {
-      const isChecked = document.getElementById('switch-' + id)?.checked;
-      const korText = document.getElementById('kor-' + id);
-      
-      if (korText) {
-        korText.innerText = isChecked ? korText.getAttribute('data-transformed') : korText.getAttribute('data-base');
-        korText.style.color = isChecked ? '#526ae5' : '#1e293b';
-      }
-    };
-
-    // 3. Daily 코스: 퀴즈 (신버전)
+    // [1] 퀴즈용 전역 함수 (현재 완벽하게 작동 중이므로 유지)
     window.handleChoice = (element, isCorrect, feedbackId) => {
-      // 상위 컨테이너 찾기
       const parentContainer = element.closest('.flex-col') || element.parentElement;
       const options = parentContainer.querySelectorAll('.quiz-option');
       const feedbackArea = document.getElementById(feedbackId);
       const resultText = document.getElementById('feedback-result');
 
-      // 모든 옵션 색상 초기화
       options.forEach(opt => {
-        opt.style.borderColor = "#fff";
-        opt.style.backgroundColor = "#fff";
-        opt.style.color = "#334155";
+        opt.style.borderColor = "#fff"; opt.style.backgroundColor = "#fff"; opt.style.color = "#334155";
       });
 
-      // 정답/오답 스타일 적용
       if (isCorrect) {
         element.style.borderColor = "#22c55e"; element.style.backgroundColor = "#f0fdf4"; element.style.color = "#15803d";
         if (resultText) { resultText.innerText = "✅ Correct!"; resultText.style.color = "#22c55e"; }
@@ -217,32 +189,66 @@ const App = () => {
       if (feedbackArea) feedbackArea.classList.remove('hidden');
     };
 
-    // 4. Daily 코스: 퀴즈 (구버전)
     window.checkQuiz = (num, isCorrect) => {
       document.querySelectorAll('.quiz-option').forEach(el => {
         el.classList.remove('active-correct', 'active-wrong');
         const span = el.querySelector('span:last-child');
         if (span) span.style.opacity = "0";
       });
-      
       const selected = document.getElementById('opt-' + num);
       const mark = document.getElementById('mark-' + num);
-      
       if (isCorrect) selected?.classList.add('active-correct');
       else selected?.classList.add('active-wrong');
-      
       if (mark) mark.style.opacity = "1";
       document.getElementById('quiz-feedback')?.classList.remove('hidden');
     };
 
-    // 컴포넌트가 꺼질 때(다른 메뉴 이동 시) 메모리 청소
+    // [2] 토글 스위치용 이벤트 위임 (React의 onchange 무시 현상 완벽 방어)
+    const handleToggleClick = (e) => {
+      const switchLabel = e.target.closest('.tk-switch');
+      if (switchLabel) {
+        // 체크박스 애니메이션이 끝날 수 있도록 10ms 딜레이를 줍니다.
+        setTimeout(() => {
+          const sw = switchLabel.querySelector('input[type="checkbox"]');
+          if (!sw) return;
+
+          // id="switch-1" 등에서 숫자만 추출
+          const idMatch = sw.id.match(/\d+/);
+          if (!idMatch) return;
+          const id = idMatch[0];
+
+          const korText = document.getElementById('kor-' + id);
+          const engText = document.getElementById('eng-' + id);
+
+          if (korText) {
+            // 구버전(data-base)과 신버전(data-opt1) 모두 알아서 호환
+            const textOn = korText.getAttribute('data-opt2') || korText.getAttribute('data-transformed');
+            const textOff = korText.getAttribute('data-opt1') || korText.getAttribute('data-base');
+            if (textOn && textOff) {
+              korText.innerText = sw.checked ? textOn : textOff;
+              korText.style.color = sw.checked ? '#526ae5' : '#1e293b';
+            }
+          }
+          if (engText) {
+            const engOn = engText.getAttribute('data-eng2');
+            const engOff = engText.getAttribute('data-eng1');
+            if (engOn && engOff) {
+              engText.innerText = sw.checked ? engOn : engOff;
+            }
+          }
+        }, 10);
+      }
+    };
+
+    // 컨테이너 전체에 클릭 감지기를 붙입니다.
+    container.addEventListener('click', handleToggleClick);
+
     return () => {
-      delete window.toggleVibe;
-      delete window.toggleVerb;
+      if (container) container.removeEventListener('click', handleToggleClick);
       delete window.handleChoice;
       delete window.checkQuiz;
     };
-  }, []); // 빈 배열을 넣어 앱이 켜질 때 딱 한 번만 주입되도록 합니다.
+  }, [selectedLesson, contentTab, appMode]);
 
   const renderMedia = (url) => {
     if (!url) return <div className="text-white/50 font-bold flex flex-col items-center gap-2"><MonitorPlay size={40} className="opacity-50"/>영상/음원이 아직 준비되지 않았습니다.</div>;
