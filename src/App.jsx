@@ -18,12 +18,14 @@ const CLASS_AUDIO_BASE_URL = `${BUNNY_CDN_HOST}/audio_class`;
 const PDF_CDN_BASE_URL = `${BUNNY_CDN_HOST}/pdf-re`; 
 const STORAGE_KEY = 'talkori_progress_v1';
 
-// ★ 수술 1: 스마트 유튜브 플레이어 부품 추가 ★
+// ★ 수술 1: 스마트 유튜브 플레이어 부품 (A-B 반복 버그 완벽 수정) ★
 const YouTubePlayer = ({ videoId }) => {
   const playerRef = useRef(null);
   const ytPlayerRef = useRef(null);
-  const [pointA, setPointA] = useState(null);
-  const [pointB, setPointB] = useState(null);
+  
+  // 변경: 타이머가 갇히지 않도록 최신 값을 보관하는 '비밀 창고(Ref)' 사용
+  const loopData = useRef({ a: null, b: null }); 
+  const [uiState, setUiState] = useState(0); // 0: 기본, 1: A지점, 2: A-B반복중
   const loopIntervalRef = useRef(null);
 
   useEffect(() => {
@@ -63,8 +65,12 @@ const YouTubePlayer = ({ videoId }) => {
   const startLoopCheck = () => {
     stopLoopCheck();
     loopIntervalRef.current = setInterval(() => {
-      if (ytPlayerRef.current && ytPlayerRef.current.getCurrentTime && pointA !== null && pointB !== null) {
-        if (ytPlayerRef.current.getCurrentTime() >= pointB) ytPlayerRef.current.seekTo(pointA);
+      // 이제 타이머가 옛날 값에 갇히지 않고 항상 최신 a, b 값을 꺼내봅니다!
+      if (ytPlayerRef.current && ytPlayerRef.current.getCurrentTime) {
+        const { a, b } = loopData.current;
+        if (a !== null && b !== null && ytPlayerRef.current.getCurrentTime() >= b) {
+          ytPlayerRef.current.seekTo(a);
+        }
       }
     }, 100);
   };
@@ -80,22 +86,36 @@ const YouTubePlayer = ({ videoId }) => {
   const toggleABRepeat = () => {
     if (!ytPlayerRef.current || !ytPlayerRef.current.getCurrentTime) return;
     const currentTime = ytPlayerRef.current.getCurrentTime();
-    if (pointA === null) { setPointA(currentTime); } 
-    else if (pointB === null) {
-      if (currentTime > pointA) { setPointB(currentTime); ytPlayerRef.current.seekTo(pointA); ytPlayerRef.current.playVideo(); } 
-      else { setPointA(null); }
-    } else { setPointA(null); setPointB(null); }
+    
+    if (uiState === 0) { // 아무것도 없을 때 -> A 세팅
+      loopData.current.a = currentTime;
+      setUiState(1);
+    } else if (uiState === 1) { // A만 있을 때 -> B 세팅
+      if (currentTime > loopData.current.a) {
+        loopData.current.b = currentTime;
+        setUiState(2);
+        ytPlayerRef.current.seekTo(loopData.current.a);
+        ytPlayerRef.current.playVideo();
+      } else { // B를 A보다 앞선 시간에 누르면 꼬이지 않게 초기화
+        loopData.current.a = null;
+        setUiState(0);
+      }
+    } else { // 반복 중일 때 누르면 -> 모두 해제
+      loopData.current.a = null;
+      loopData.current.b = null;
+      setUiState(0);
+    }
   };
 
   return (
-    <div className="w-full flex flex-col w-full h-full bg-black">
+    <div className="flex flex-col w-full h-full bg-black md:rounded-[2rem] overflow-hidden">
       <div className="aspect-video w-full relative bg-black">
         <div ref={playerRef} className="absolute top-0 left-0 w-full h-full"></div>
       </div>
       <div className="w-full bg-slate-900 p-3 md:p-4 flex items-center justify-center gap-2 md:gap-4 text-white shrink-0 z-10">
         <button onClick={() => skip(-5)} className="px-3 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-xs md:text-sm font-bold flex items-center gap-1 transition-colors"><ChevronLeft size={16}/> 5s</button>
-        <button onClick={toggleABRepeat} className={`px-4 py-2 rounded-lg text-xs md:text-sm font-bold transition-colors border ${pointA !== null && pointB !== null ? 'bg-[#3713ec] border-[#3713ec] text-white shadow-lg shadow-[#3713ec]/50' : pointA !== null ? 'bg-blue-500 border-blue-500 text-white animate-pulse' : 'bg-slate-800 border-slate-700 hover:bg-slate-700 text-slate-300'}`}>
-          {pointA === null ? 'A-B Repeat' : pointB === null ? 'Set B Point' : '🔄 Repeating A-B'}
+        <button onClick={toggleABRepeat} className={`px-4 py-2 rounded-lg text-xs md:text-sm font-bold transition-colors border ${uiState === 2 ? 'bg-[#3713ec] border-[#3713ec] text-white shadow-lg shadow-[#3713ec]/50' : uiState === 1 ? 'bg-blue-500 border-blue-500 text-white animate-pulse' : 'bg-slate-800 border-slate-700 hover:bg-slate-700 text-slate-300'}`}>
+          {uiState === 0 ? 'A-B Repeat' : uiState === 1 ? 'Set B Point' : '🔄 Repeating A-B'}
         </button>
         <button onClick={() => skip(5)} className="px-3 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-xs md:text-sm font-bold flex items-center gap-1 transition-colors">5s <ChevronRight size={16}/></button>
       </div>
