@@ -343,6 +343,8 @@ const App = () => {
     'DAILY': { shorts: 'EPISODE', logic: 'REVIEW' }     
   };
 
+// ★ 코스 숨김 스위치 (true로 해두면 화면에서 사라지고, false로 바꾸면 다시 나타납니다!)
+  const HIDE_DAILY_COURSE = true;
 
   // ==========================================
   // [강의실 상태 및 로직] 
@@ -363,6 +365,12 @@ const App = () => {
     }
     courses['MUSTKNOW'].sections = mustKnowLessons.length > 0 ? [ { title: "Chapter 1", lessons: mustKnowLessons.slice(0, 20) }, { title: "Chapter 2", lessons: mustKnowLessons.slice(20, 40) }, { title: "Chapter 3", lessons: mustKnowLessons.slice(40, 60) }, { title: "Chapter 4", lessons: mustKnowLessons.slice(60, 81) } ] : [{ title: "업데이트 준비 중", lessons: [] }];
     courses['DAILY'].sections = dailyLessons.length > 0 ? [ { title: "Season 1", lessons: dailyLessons.slice(0, 30) }, { title: "Season 2", lessons: dailyLessons.slice(30, 60) } ] : [{ title: "업데이트 준비 중", lessons: [] }];
+
+    // ★ 추가할 코드: 스위치가 켜져 있으면, 화면으로 보내기 전에 DAILY 데이터를 몰래 삭제!
+      if (HIDE_DAILY_COURSE) {
+        delete courses['DAILY'];
+      }
+      
     return courses;
   }, []);
 
