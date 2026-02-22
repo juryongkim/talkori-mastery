@@ -163,7 +163,7 @@ const App = () => {
     return `${PDF_CDN_BASE_URL}/${fileName}`; // 버니넷 주소로 조립
   };
 
-// ★ 2. Issue 1 해결: 정확한 HTML 타겟팅 이벤트 위임 로직 ★
+// ★ 2. Issue 1 해결: 강력한 이벤트 위임 및 상태 추적 로직 ★
   useEffect(() => {
     if (appMode !== 'class' || contentTab !== 'pdf' || !webContentRef.current) return;
     const container = webContentRef.current;
@@ -173,69 +173,55 @@ const App = () => {
       const flipCard = e.target.closest('.flip-card');
       if (flipCard) {
         flipCard.classList.toggle('flipped');
-        return; 
       }
 
-      // B. 퀴즈 옵션 버튼 감지 (opt-1, mark-1 구조 완벽 대응)
+      // B. 퀴즈 옵션 버튼 감지
       const quizOption = e.target.closest('.quiz-option');
       if (quizOption) {
-        // ID에서 번호 추출 (예: 'opt-1' -> '1')
         const idMatch = quizOption.id.match(/opt-(\d+)/);
         if (!idMatch) return;
         const num = idMatch[1];
 
-        // 정답 여부 확인 (onclick="checkQuiz(1, true)" 에서 true 추출)
         const onclickAttr = quizOption.getAttribute('onclick') || '';
         const isCorrect = onclickAttr.includes('true'); 
 
-        // 1. 모든 옵션 초기화 (기존 클래스 제거 및 O/X 마크 숨김)
         container.querySelectorAll('.quiz-option').forEach(el => {
           el.classList.remove('active-correct', 'active-wrong');
           const markSpan = el.querySelector('span:last-child');
           if (markSpan) markSpan.style.opacity = "0";
         });
 
-        // 2. 선택된 옵션 스타일 적용
         const mark = container.querySelector('#mark-' + num);
-        if (isCorrect) {
-          quizOption.classList.add('active-correct');
-        } else {
-          quizOption.classList.add('active-wrong');
-        }
+        if (isCorrect) quizOption.classList.add('active-correct');
+        else quizOption.classList.add('active-wrong');
+        
         if (mark) mark.style.opacity = "1";
 
-        // 3. 피드백 창 띄우기
         const feedbackArea = container.querySelector('#quiz-feedback');
         if (feedbackArea) feedbackArea.classList.remove('hidden');
       }
-    };
 
-    const handleWebChange = (e) => {
-      // C. 토글 스위치 감지 (switch-1, kor-1 구조 완벽 대응)
-      if (e.target.matches('.tk-switch input[type="checkbox"]')) {
-        const sw = e.target;
-        // ID에서 번호 추출 (예: 'switch-1' -> '1')
-        const idMatch = sw.id.match(/switch-(\d+)/);
-        if (!idMatch) return;
-        const id = idMatch[1];
-        
-        const korText = container.querySelector('#kor-' + id);
-        if (korText) {
-          const isChecked = sw.checked;
-          // data-transformed 와 data-base 값을 가져와 치환
-          korText.innerText = isChecked ? korText.getAttribute('data-transformed') : korText.getAttribute('data-base');
-          korText.style.color = isChecked ? '#526ae5' : '#1e293b';
-        }
+      // C. 토글 스위치 감지 (클릭 직후 상태값을 즉시 읽어오기)
+      const switchLabel = e.target.closest('.tk-switch');
+      if (switchLabel) {
+        setTimeout(() => {
+          const sw = switchLabel.querySelector('input[type="checkbox"]');
+          if (!sw) return;
+          const idMatch = sw.id.match(/switch-(\d+)/);
+          if (idMatch) {
+            const id = idMatch[1];
+            const korText = container.querySelector('#kor-' + id);
+            if (korText) {
+              korText.innerText = sw.checked ? korText.getAttribute('data-transformed') : korText.getAttribute('data-base');
+              korText.style.color = sw.checked ? '#526ae5' : '#1e293b';
+            }
+          }
+        }, 10);
       }
     };
 
     container.addEventListener('click', handleWebClick);
-    container.addEventListener('change', handleWebChange);
-
-    return () => {
-      container.removeEventListener('click', handleWebClick);
-      container.removeEventListener('change', handleWebChange);
-    };
+    return () => container.removeEventListener('click', handleWebClick);
   }, [selectedLesson, contentTab, appMode]);
 
   const renderMedia = (url) => {
@@ -467,21 +453,43 @@ const App = () => {
         </div>
       </div>
       
-      {/* ★ 3. 아이콘 텍스트 깨짐 철벽 방어 (대문자 무력화) ★ */}
+{/* ★ 2. Issue 2 & 스타일 증발 해결: 폰트 주입 및 커스텀 색상 강제 지정 ★ */}
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Lexend:wght@400;600;900&family=Noto+Sans+KR:wght@400;700;900&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght@100..700&display=swap');
+
         body { font-family: 'Lexend', sans-serif; }
         .korean-text { font-family: 'Noto Sans KR', sans-serif; }
         .custom-scrollbar::-webkit-scrollbar { width: 6px; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
-.material-symbols-outlined { 
+        
+        /* 아이콘 텍스트 깨짐 철벽 방어 */
+        .material-symbols-outlined { 
           text-transform: none !important; 
           font-family: 'Material Symbols Outlined' !important;
           font-feature-settings: "liga" !important;
           font-variant-ligatures: normal !important;
           white-space: nowrap !important;
           letter-spacing: normal !important;
-        }
+        } 
+
+        /* 리액트가 삭제해버린 워드프레스 컬러 강제 복구 */
+        .text-bori-primary { color: #f59e0b !important; }
+        .bg-bori-primary { background-color: #f59e0b !important; }
+        .border-bori-primary { border-color: #f59e0b !important; }
+        .text-bori-secondary { color: #3b82f6 !important; }
+        .bg-bori-secondary { background-color: #3b82f6 !important; }
+        .border-bori-secondary { border-color: #3b82f6 !important; }
+        .bg-bori-light { background-color: #fffbeb !important; }
+        .text-tk-primary { color: #526ae5 !important; }
+        .bg-tk-primary { background-color: #526ae5 !important; }
+        .border-tk-primary { border-color: #526ae5 !important; }
+        .bg-tk-primary\\/5 { background-color: rgba(82, 106, 229, 0.05) !important; }
+        .rounded-tk { border-radius: 1.5rem !important; }
+        
+        /* 카드 플립 애니메이션 강제 적용 */
+        .flip-card.flipped .flip-card-inner { transform: rotateY(180deg) !important; }
+        .flip-card-back { transform: rotateY(180deg) !important; }
       `}</style>
     </div>
   );
