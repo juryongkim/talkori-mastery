@@ -11,7 +11,8 @@ import classData from './class_data.json';
 import vocaData from './voca_data.json';
 
 const ALLOWED_ORIGIN = "https://talkori.com";
-const SALES_PAGE_URL = "https://talkori.com/price";
+const SALES_PAGE_URL = "https://talkori.com";
+const PRICE_PAGE_URL = "https://talkori.com/price";
 const BUNNY_CDN_HOST = "https://talkori.b-cdn.net";
 const CDN_BASE_URL = `${BUNNY_CDN_HOST}/audio_tk`;
 const CLASS_AUDIO_BASE_URL = `${BUNNY_CDN_HOST}/audio_class`;
@@ -872,11 +873,12 @@ const App = () => {
             </p>
             <div className="flex flex-col gap-3">
               <button 
-                onClick={() => window.location.href = SALES_PAGE_URL} 
-                className="w-full bg-[#3713ec] text-white font-bold py-4 rounded-xl shadow-lg hover:bg-blue-700 hover:shadow-xl transition-all"
-              >
-                지금 가입하기 🚀
-              </button>
+  // ★ SALES_PAGE_URL을 PRICE_PAGE_URL로 바꾸고, 중간에 parent. 를 추가했습니다!
+  onClick={() => window.parent.location.href = PRICE_PAGE_URL} 
+  className="w-full bg-[#3713ec] text-white font-bold py-4 rounded-xl shadow-lg hover:bg-blue-700 hover:shadow-xl transition-all"
+>
+  지금 가입하기 🚀
+</button>
               <button 
                 onClick={() => setShowPremiumPopup(false)} 
                 className="w-full text-slate-400 font-medium py-2 text-sm hover:text-slate-600 transition-colors"
