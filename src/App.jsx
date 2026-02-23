@@ -862,7 +862,7 @@ const App = () => {
             <div className="text-5xl mb-4">🔒</div>
             <h3 className="text-2xl font-black mb-2 text-slate-800">Premium Content</h3>
             <p className="text-slate-500 mb-8 text-sm leading-relaxed">
-              This lesson is for premium members only.<br/>Upgrade now to get <b>unlimited access to</b>을<br/>all classes and the wordbook!
+              This lesson is for premium members only.<br/>Upgrade now to get <b>unlimited access to</b><br/>all classes and the wordbook!
             </p>
             <div className="flex flex-col gap-3">
               <button 
