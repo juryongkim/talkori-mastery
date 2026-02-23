@@ -19,6 +19,17 @@ const CLASS_AUDIO_BASE_URL = `${BUNNY_CDN_HOST}/audio_class`;
 const PDF_CDN_BASE_URL = `${BUNNY_CDN_HOST}/pdf-re`; 
 const STORAGE_KEY = 'talkori_progress_v1';
 
+// 🔽🔽🔽 여기에 마법의 지우개를 턱! 붙여넣으세요 🔽🔽🔽
+const cleanWebContent = (htmlString) => {
+  if (!htmlString) return "";
+  
+  // "Join for Free"라는 글자가 포함된 버튼이나 링크를 HTML에서 자동 삭제
+  return htmlString
+    .replace(/<a[^>]*>[\s\S]*?Join for Free[\s\S]*?<\/a>/gi, "")
+    .replace(/<button[^>]*>[\s\S]*?Join for Free[\s\S]*?<\/button>/gi, "")
+    .replace(/<div[^>]*class="[^"]*wp-block-button[^"]*"[^>]*>[\s\S]*?Join for Free[\s\S]*?<\/div>/gi, "");
+};
+
 // ★ 수술: 유튜브 + 버니넷(MP4) 완벽 호환 만능 하이브리드 플레이어 ★
 const UniversalPlayer = ({ url }) => {
   // 유튜브 주소인지 버니넷(일반 영상) 주소인지 스스로 판단합니다.
@@ -783,9 +794,10 @@ const renderMedia = (url) => {
 </div>
                         ) : (<div className="flex flex-col items-center justify-center h-[400px] text-slate-400"><FileText size={48} className="mb-4 opacity-30"/><p className="font-bold text-sm">이 강의는 PDF 교재가 없습니다.</p></div>)
                       ) : (
-                        selectedLesson.web_content ? (
+                       selectedLesson.web_content ? (
                           <div className="w-full h-auto bg-white p-4 md:p-8" ref={webContentRef}>
-                            <div className="w-full text-left text-slate-800 leading-relaxed overflow-x-hidden" dangerouslySetInnerHTML={{ __html: selectedLesson.web_content }} />
+                            {/* 👇 여기가 마법의 지우개가 적용된 부분입니다! 👇 */}
+                            <div className="w-full text-left text-slate-800 leading-relaxed overflow-x-hidden" dangerouslySetInnerHTML={{ __html: cleanWebContent(selectedLesson.web_content) }} />
                           </div>
                         ) : (<div className="flex flex-col items-center justify-center h-[400px] text-slate-400"><FileText size={48} className="mb-4 opacity-30"/><p className="font-bold text-sm">웹 교재가 아직 등록되지 않았습니다.</p></div>)
                       )
