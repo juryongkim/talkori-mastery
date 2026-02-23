@@ -130,11 +130,14 @@ const UniversalPlayer = ({ url }) => {
     }
   };
 
-  return (
+return (
     <div className="flex flex-col w-full h-full bg-black md:rounded-[2rem] overflow-hidden shadow-2xl">
       <div className="aspect-video w-full relative bg-black flex items-center justify-center">
         {isYouTube ? (
-          <div ref={ytContainerRef} className="absolute top-0 left-0 w-full h-full"></div>
+          // ★ 리액트 멘붕 방지용 보호막(Wrapper) 한 겹 추가!
+          <div className="absolute top-0 left-0 w-full h-full">
+            <div ref={ytContainerRef} className="w-full h-full"></div>
+          </div>
         ) : (
           <video 
             ref={videoRef} 
