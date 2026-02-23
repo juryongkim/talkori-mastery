@@ -19,16 +19,29 @@ const CLASS_AUDIO_BASE_URL = `${BUNNY_CDN_HOST}/audio_class`;
 const PDF_CDN_BASE_URL = `${BUNNY_CDN_HOST}/pdf-re`; 
 const STORAGE_KEY = 'talkori_progress_v1';
 
-// ★ 수술 1: 스마트 유튜브 플레이어 부품 (A-B 반복 버그 완벽 수정) ★
-const YouTubePlayer = ({ videoId }) => {
-  const playerRef = useRef(null);
+// ★ 수술: 유튜브 + 버니넷(MP4) 완벽 호환 만능 하이브리드 플레이어 ★
+const UniversalPlayer = ({ url }) => {
+  // 유튜브 주소인지 버니넷(일반 영상) 주소인지 스스로 판단합니다.
+  const isYouTube = url && (url.includes('youtu.be') || url.includes('youtube.com'));
+  let videoId = "";
+  if (isYouTube) {
+    if (url.includes('youtu.be/')) videoId = url.split('youtu.be/')[1]?.split('?')[0];
+    else if (url.includes('v=')) videoId = url.split('v=')[1]?.split('&')[0];
+    else if (url.includes('embed/')) videoId = url.split('embed/')[1]?.split('?')[0];
+  }
+
+  const ytContainerRef = useRef(null);
   const ytPlayerRef = useRef(null);
+  const videoRef = useRef(null); // 버니넷(HTML5) 비디오용 조종간
   
   const loopData = useRef({ a: null, b: null }); 
   const [uiState, setUiState] = useState(0); 
   const loopIntervalRef = useRef(null);
 
+  // 1. 유튜브 모드일 때만 작동하는 엔진 세팅
   useEffect(() => {
+    if (!isYouTube) return;
+    
     if (!window.YT) {
       const tag = document.createElement('script');
       tag.src = "https://www.youtube.com/iframe_api";
@@ -37,8 +50,8 @@ const YouTubePlayer = ({ videoId }) => {
     }
 
     const initPlayer = () => {
-      if (!playerRef.current) return;
-      ytPlayerRef.current = new window.YT.Player(playerRef.current, {
+      if (!ytContainerRef.current) return;
+      ytPlayerRef.current = new window.YT.Player(ytContainerRef.current, {
         videoId: videoId,
         playerVars: { rel: 0, playsinline: 1, enablejsapi: 1 },
         events: {
@@ -60,31 +73,40 @@ const YouTubePlayer = ({ videoId }) => {
       stopLoopCheck();
       if (ytPlayerRef.current && ytPlayerRef.current.destroy) ytPlayerRef.current.destroy();
     };
-  }, [videoId]);
+  }, [isYouTube, videoId]);
+
+  // 2. 통합 컨트롤러 (유튜브든 버니넷이든 알아서 조종합니다!)
+  const getCurrentTime = () => {
+    if (isYouTube && ytPlayerRef.current && ytPlayerRef.current.getCurrentTime) return ytPlayerRef.current.getCurrentTime();
+    if (!isYouTube && videoRef.current) return videoRef.current.currentTime;
+    return 0;
+  };
+
+  const seekTo = (time) => {
+    if (isYouTube && ytPlayerRef.current && ytPlayerRef.current.seekTo) ytPlayerRef.current.seekTo(time, true);
+    if (!isYouTube && videoRef.current) videoRef.current.currentTime = time;
+  };
+
+  const playMedia = () => {
+    if (isYouTube && ytPlayerRef.current && ytPlayerRef.current.playVideo) ytPlayerRef.current.playVideo();
+    if (!isYouTube && videoRef.current) videoRef.current.play();
+  };
 
   const startLoopCheck = () => {
     stopLoopCheck();
     loopIntervalRef.current = setInterval(() => {
-      if (ytPlayerRef.current && ytPlayerRef.current.getCurrentTime) {
-        const { a, b } = loopData.current;
-        if (a !== null && b !== null && ytPlayerRef.current.getCurrentTime() >= b) {
-          ytPlayerRef.current.seekTo(a);
-        }
-      }
+      const current = getCurrentTime();
+      const { a, b } = loopData.current;
+      if (a !== null && b !== null && current >= b) seekTo(a);
     }, 100);
   };
 
   const stopLoopCheck = () => { if (loopIntervalRef.current) clearInterval(loopIntervalRef.current); };
 
-  const skip = (seconds) => {
-    if (ytPlayerRef.current && ytPlayerRef.current.getCurrentTime) {
-      ytPlayerRef.current.seekTo(ytPlayerRef.current.getCurrentTime() + seconds);
-    }
-  };
+  const skip = (seconds) => { seekTo(getCurrentTime() + seconds); };
 
   const toggleABRepeat = () => {
-    if (!ytPlayerRef.current || !ytPlayerRef.current.getCurrentTime) return;
-    const currentTime = ytPlayerRef.current.getCurrentTime();
+    const currentTime = getCurrentTime();
     
     if (uiState === 0) { 
       loopData.current.a = currentTime;
@@ -93,8 +115,9 @@ const YouTubePlayer = ({ videoId }) => {
       if (currentTime > loopData.current.a) {
         loopData.current.b = currentTime;
         setUiState(2);
-        ytPlayerRef.current.seekTo(loopData.current.a);
-        ytPlayerRef.current.playVideo();
+        seekTo(loopData.current.a);
+        playMedia();
+        if (!isYouTube) startLoopCheck(); // 버니넷 영상 재생 시 루프 강제 가동
       } else { 
         loopData.current.a = null;
         setUiState(0);
@@ -103,13 +126,27 @@ const YouTubePlayer = ({ videoId }) => {
       loopData.current.a = null;
       loopData.current.b = null;
       setUiState(0);
+      if (!isYouTube && videoRef.current?.paused) stopLoopCheck();
     }
   };
 
   return (
-    <div className="flex flex-col w-full h-full bg-black md:rounded-[2rem] overflow-hidden">
-      <div className="aspect-video w-full relative bg-black">
-        <div ref={playerRef} className="absolute top-0 left-0 w-full h-full"></div>
+    <div className="flex flex-col w-full h-full bg-black md:rounded-[2rem] overflow-hidden shadow-2xl">
+      <div className="aspect-video w-full relative bg-black flex items-center justify-center">
+        {isYouTube ? (
+          <div ref={ytContainerRef} className="absolute top-0 left-0 w-full h-full"></div>
+        ) : (
+          <video 
+            ref={videoRef} 
+            src={url} 
+            controls 
+            controlsList="nodownload" // 불법 다운로드 버튼 숨김 처리
+            playsInline
+            onPlay={startLoopCheck}
+            onPause={stopLoopCheck}
+            className="w-full h-full object-contain outline-none"
+          ></video>
+        )}
       </div>
       <div className="w-full bg-slate-900 p-3 md:p-4 flex items-center justify-center gap-2 md:gap-4 text-white shrink-0 z-10">
         <button onClick={() => skip(-5)} className="px-3 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-xs md:text-sm font-bold flex items-center gap-1 transition-colors"><ChevronLeft size={16}/> 5s</button>
@@ -491,26 +528,21 @@ const App = () => {
     };
   }, [selectedLesson, contentTab, appMode]);
 
-  const renderMedia = (url) => {
+const renderMedia = (url) => {
     if (!url) return <div className="aspect-video w-full flex flex-col items-center justify-center text-white/50 font-bold gap-2"><MonitorPlay size={40} className="opacity-50"/>영상/음원이 아직 준비되지 않았습니다.</div>;
     
-    if (url.includes('youtu.be') || url.includes('youtube.com')) {
-      let vid = "";
-      if (url.includes('youtu.be/')) vid = url.split('youtu.be/')[1]?.split('?')[0];
-      else if (url.includes('v=')) vid = url.split('v=')[1]?.split('&')[0];
-      else if (url.includes('embed/')) vid = url.split('embed/')[1]?.split('?')[0];
-      return <YouTubePlayer videoId={vid} />;
-    }
-    
+    // 오디오 파일(mp3, wav 등)은 기존대로 까만 화면에 소리만 나오게 처리
     if (url.match(/\.(m4a|mp3|wav)$/i)) {
       return (
-        <div className="aspect-video w-full flex flex-col items-center justify-center bg-slate-900">
+        <div className="aspect-video w-full flex flex-col items-center justify-center bg-slate-900 md:rounded-[2rem]">
           <Volume2 size={48} className="text-white/30 mb-6" />
           <audio controls src={url} className="w-3/4 outline-none"></audio>
         </div>
       );
     }
-    return <video controls src={url} className="aspect-video w-full object-contain outline-none bg-black"></video>;
+    
+    // 유튜브 영상과 버니넷(MP4) 영상은 모두 [만능 하이브리드 플레이어]가 씹어 먹습니다!
+    return <UniversalPlayer url={url} />;
   };
 
   const currentCourseLessons = groupedClassData[selectedCourse]?.sections.flatMap(s => s.lessons) || [];
