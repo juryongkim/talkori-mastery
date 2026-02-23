@@ -860,9 +860,9 @@ const App = () => {
         <div className="fixed inset-0 bg-black/60 z-[9999] flex items-center justify-center p-4 backdrop-blur-sm">
           <div className="bg-white rounded-[2rem] p-8 max-w-sm w-full text-center shadow-2xl transform transition-all">
             <div className="text-5xl mb-4">🔒</div>
-            <h3 className="text-2xl font-black mb-2 text-slate-800">프리미엄 전용 강의</h3>
+            <h3 className="text-2xl font-black mb-2 text-slate-800">Premium Content</h3>
             <p className="text-slate-500 mb-8 text-sm leading-relaxed">
-              이 강의는 유료 회원만 볼 수 있어요.<br/>지금 가입하고 <b>모든 클래스와 단어장</b>을<br/>무제한으로 즐겨보세요!
+              This lesson is for premium members only.<br/>Upgrade now to get <b>unlimited access to</b>을<br/>all classes and the wordbook!
             </p>
             <div className="flex flex-col gap-3">
               <button 
@@ -870,13 +870,13 @@ const App = () => {
   onClick={() => window.parent.location.href = PRICE_PAGE_URL} 
   className="w-full bg-[#3713ec] text-white font-bold py-4 rounded-xl shadow-lg hover:bg-blue-700 hover:shadow-xl transition-all"
 >
-  지금 가입하기 🚀
+  Upgrade Now 🚀
 </button>
               <button 
                 onClick={() => setShowPremiumPopup(false)} 
                 className="w-full text-slate-400 font-medium py-2 text-sm hover:text-slate-600 transition-colors"
               >
-                다음에 할게요
+                Maybe later
               </button>
             </div>
           </div>
