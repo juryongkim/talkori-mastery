@@ -19,16 +19,16 @@ const CLASS_AUDIO_BASE_URL = `${BUNNY_CDN_HOST}/audio_class`;
 const PDF_CDN_BASE_URL = `${BUNNY_CDN_HOST}/pdf-re`; 
 const STORAGE_KEY = 'talkori_progress_v1';
 
-// 🔽🔽🔽 여기에 마법의 지우개를 턱! 붙여넣으세요 🔽🔽🔽
-const cleanWebContent = (htmlString) => {
-  if (!htmlString) return "";
-  
-  // "Join for Free"라는 글자가 포함된 버튼이나 링크를 HTML에서 자동 삭제
-  return htmlString
-    .replace(/<a[^>]*>[\s\S]*?Join for Free[\s\S]*?<\/a>/gi, "")
-    .replace(/<button[^>]*>[\s\S]*?Join for Free[\s\S]*?<\/button>/gi, "")
-    .replace(/<div[^>]*class="[^"]*wp-block-button[^"]*"[^>]*>[\s\S]*?Join for Free[\s\S]*?<\/div>/gi, "");
-};
+// 🧹 텍스트 필터: 유료 회원에게 불필요한 "Join for Free" 관련 버튼/링크 자동 삭제 (업그레이드 버전)
+  const cleanWebContent = (htmlString) => {
+    if (!htmlString) return "";
+    
+    // "Join for Free" 또는 "Join Talkori for Free" 문구가 들어간 버튼과 링크를 싹 다 날려버립니다.
+    return htmlString
+      .replace(/<a[^>]*>[\s\S]*?(Join for Free|Join Talkori for Free)[\s\S]*?<\/a>/gi, "")
+      .replace(/<button[^>]*>[\s\S]*?(Join for Free|Join Talkori for Free)[\s\S]*?<\/button>/gi, "")
+      .replace(/<div[^>]*class="[^"]*wp-block-button[^"]*"[^>]*>[\s\S]*?(Join for Free|Join Talkori for Free)[\s\S]*?<\/div>/gi, "");
+  };
 
 // ★ 수술: 유튜브 + 버니넷(MP4) 완벽 호환 만능 하이브리드 플레이어 ★
 const UniversalPlayer = ({ url }) => {
