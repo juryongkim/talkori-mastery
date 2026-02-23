@@ -363,27 +363,8 @@ const App = () => {
 
   const groupedClassData = useMemo(() => {
     const courses = { 'MAIN233': { title: 'Real Korean Patterns 233', sections: [] }, 'MUSTKNOW': { title: 'Must-Know Patterns', sections: [] }, 'DAILY': { title: 'Daily Korean', sections: [] } };
-// 360번 줄에 있던 기존 코드를 지우고, 이 세 줄로 교체합니다!
-const mainLessons = classData.filter(l => l.course === 'MAIN233').map((l, index) => ({ ...l, isLocked: index >= 3 }));
-const mustKnowLessons = classData.filter(l => l.course === 'MUSTKNOW').map((l, index) => ({ ...l, isLocked: index >= 3 }));
-const dailyLessons = classData.filter(l => l.course === 'DAILY').map((l, index) => ({ ...l, isLocked: index >= 3 }));
-    
-    if (mainLessons.length > 0) {
-      const ranges = [ { t: "1. Solutions & Suggestions", end: 25 }, { t: "2. Intentions & Excuses", end: 50 }, { t: "3. Guessing & Gossip", end: 75 }, { t: "4. Logic & Connections", end: 99 }, { t: "5. Emotions & Attitudes", end: 122 }, { t: "6. Habits & Experience", end: 145 }, { t: "7. Emphasis & Nuance", end: 172 }, { t: "8. Comparison & Passive", end: 196 }, { t: "9. Exaggeration & Lament", end: 218 }, { t: "10. Quoting & Recall", end: 235 } ];
-      let start = 0; ranges.forEach(r => { courses['MAIN233'].sections.push({ title: r.t, lessons: mainLessons.slice(start, r.end) }); start = r.end; });
-    }
-    courses['MUSTKNOW'].sections = mustKnowLessons.length > 0 ? [ { title: "Chapter 1", lessons: mustKnowLessons.slice(0, 20) }, { title: "Chapter 2", lessons: mustKnowLessons.slice(20, 40) }, { title: "Chapter 3", lessons: mustKnowLessons.slice(40, 60) }, { title: "Chapter 4", lessons: mustKnowLessons.slice(60, 81) } ] : [{ title: "업데이트 준비 중", lessons: [] }];
-    courses['DAILY'].sections = dailyLessons.length > 0 ? [ { title: "Season 1", lessons: dailyLessons.slice(0, 30) }, { title: "Season 2", lessons: dailyLessons.slice(30, 60) } ] : [{ title: "업데이트 준비 중", lessons: [] }];
 
-    // ★ 추가할 코드: 스위치가 켜져 있으면, 화면으로 보내기 전에 DAILY 데이터를 몰래 삭제!
-      if (HIDE_DAILY_COURSE) {
-        delete courses['DAILY'];
-      }
-      
-    return courses;
-  }, []);
-
-// 코스 변경 시 & 최초 로딩 시 레슨 세팅
+    // 코스 변경 시 & 최초 로딩 시 레슨 세팅
   useEffect(() => {
     const courseObj = groupedClassData[selectedCourse];
     if (courseObj && courseObj.sections.length > 0) {
@@ -406,6 +387,27 @@ const dailyLessons = classData.filter(l => l.course === 'DAILY').map((l, index) 
       }
     }
   }, [selectedCourse, groupedClassData, classData]); // 의존성 배열에 classData 추가
+  
+// 360번 줄에 있던 기존 코드를 지우고, 이 세 줄로 교체합니다!
+const mainLessons = classData.filter(l => l.course === 'MAIN233').map((l, index) => ({ ...l, isLocked: index >= 3 }));
+const mustKnowLessons = classData.filter(l => l.course === 'MUSTKNOW').map((l, index) => ({ ...l, isLocked: index >= 3 }));
+const dailyLessons = classData.filter(l => l.course === 'DAILY').map((l, index) => ({ ...l, isLocked: index >= 3 }));
+    
+    if (mainLessons.length > 0) {
+      const ranges = [ { t: "1. Solutions & Suggestions", end: 25 }, { t: "2. Intentions & Excuses", end: 50 }, { t: "3. Guessing & Gossip", end: 75 }, { t: "4. Logic & Connections", end: 99 }, { t: "5. Emotions & Attitudes", end: 122 }, { t: "6. Habits & Experience", end: 145 }, { t: "7. Emphasis & Nuance", end: 172 }, { t: "8. Comparison & Passive", end: 196 }, { t: "9. Exaggeration & Lament", end: 218 }, { t: "10. Quoting & Recall", end: 235 } ];
+      let start = 0; ranges.forEach(r => { courses['MAIN233'].sections.push({ title: r.t, lessons: mainLessons.slice(start, r.end) }); start = r.end; });
+    }
+    courses['MUSTKNOW'].sections = mustKnowLessons.length > 0 ? [ { title: "Chapter 1", lessons: mustKnowLessons.slice(0, 20) }, { title: "Chapter 2", lessons: mustKnowLessons.slice(20, 40) }, { title: "Chapter 3", lessons: mustKnowLessons.slice(40, 60) }, { title: "Chapter 4", lessons: mustKnowLessons.slice(60, 81) } ] : [{ title: "업데이트 준비 중", lessons: [] }];
+    courses['DAILY'].sections = dailyLessons.length > 0 ? [ { title: "Season 1", lessons: dailyLessons.slice(0, 30) }, { title: "Season 2", lessons: dailyLessons.slice(30, 60) } ] : [{ title: "업데이트 준비 중", lessons: [] }];
+
+    // ★ 추가할 코드: 스위치가 켜져 있으면, 화면으로 보내기 전에 DAILY 데이터를 몰래 삭제!
+      if (HIDE_DAILY_COURSE) {
+        delete courses['DAILY'];
+      }
+      
+    return courses;
+  }, []);
+
 
 // ★ 2. 코스에 맞춰 탭을 자동으로 찾아주는 기능
   useEffect(() => {
