@@ -23,9 +23,8 @@ const YouTubePlayer = ({ videoId }) => {
   const playerRef = useRef(null);
   const ytPlayerRef = useRef(null);
   
-  // 변경: 타이머가 갇히지 않도록 최신 값을 보관하는 '비밀 창고(Ref)' 사용
   const loopData = useRef({ a: null, b: null }); 
-  const [uiState, setUiState] = useState(0); // 0: 기본, 1: A지점, 2: A-B반복중
+  const [uiState, setUiState] = useState(0); 
   const loopIntervalRef = useRef(null);
 
   useEffect(() => {
@@ -65,7 +64,6 @@ const YouTubePlayer = ({ videoId }) => {
   const startLoopCheck = () => {
     stopLoopCheck();
     loopIntervalRef.current = setInterval(() => {
-      // 이제 타이머가 옛날 값에 갇히지 않고 항상 최신 a, b 값을 꺼내봅니다!
       if (ytPlayerRef.current && ytPlayerRef.current.getCurrentTime) {
         const { a, b } = loopData.current;
         if (a !== null && b !== null && ytPlayerRef.current.getCurrentTime() >= b) {
@@ -87,20 +85,20 @@ const YouTubePlayer = ({ videoId }) => {
     if (!ytPlayerRef.current || !ytPlayerRef.current.getCurrentTime) return;
     const currentTime = ytPlayerRef.current.getCurrentTime();
     
-    if (uiState === 0) { // 아무것도 없을 때 -> A 세팅
+    if (uiState === 0) { 
       loopData.current.a = currentTime;
       setUiState(1);
-    } else if (uiState === 1) { // A만 있을 때 -> B 세팅
+    } else if (uiState === 1) { 
       if (currentTime > loopData.current.a) {
         loopData.current.b = currentTime;
         setUiState(2);
         ytPlayerRef.current.seekTo(loopData.current.a);
         ytPlayerRef.current.playVideo();
-      } else { // B를 A보다 앞선 시간에 누르면 꼬이지 않게 초기화
+      } else { 
         loopData.current.a = null;
         setUiState(0);
       }
-    } else { // 반복 중일 때 누르면 -> 모두 해제
+    } else { 
       loopData.current.a = null;
       loopData.current.b = null;
       setUiState(0);
@@ -124,8 +122,17 @@ const YouTubePlayer = ({ videoId }) => {
 };
 
 const App = () => {
-  const [appMode, setAppMode] = useState('class'); 
-  const isDemoMode = new URLSearchParams(window.location.search).get('demo') === 'true';
+  // ==========================================
+  // [초기 설정 및 URL 꼬리표 해독기] 
+  // ==========================================
+  const urlParams = new URLSearchParams(window.location.search);
+  const initialAppMode = urlParams.get('tab') === 'voca' ? 'voca' : 'class';
+  const initialDemoMode = urlParams.get('mode') === 'demo' || urlParams.get('demo') === 'true';
+  const initialLessonId = urlParams.get('lesson');
+
+  const [appMode, setAppMode] = useState(initialAppMode); 
+  const [isDemoMode, setIsDemoMode] = useState(initialDemoMode);
+  const [showPremiumPopup, setShowPremiumPopup] = useState(false);
 
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
   useEffect(() => {
@@ -135,10 +142,8 @@ const App = () => {
   }, []);
   const isMobile = windowWidth <= 768;
 
-  // 웹 교재(HTML) 영역 참조
   const webContentRef = useRef(null);
 
-  // ★ 버니넷 다이렉트 주소 변환기
   const getBunnyPdfUrl = (url) => {
     if (!url) return "";
     const fileName = url.split('/').pop(); 
@@ -198,7 +203,6 @@ const App = () => {
   };
   const toggleSpeed = () => setPlaybackRate(prev => (prev === 1.0 ? 0.8 : prev === 0.8 ? 0.6 : 1.0));
 
-// ★ 추가: 앱 나가기 (아이프레임 부모에게 신호 보내기)
   const handleExit = () => {
     if (isDemoMode) {
         window.parent.location.href = SALES_PAGE_URL;
@@ -217,9 +221,6 @@ const App = () => {
     return totalItems === 0 ? 0 : Math.round((completedItems / totalItems) * 100);
   };
 
-  
-
-  // --- 가이드북 컴포넌트 ---
   const GuideBook = () => {
     return (
       <div className="flex-1 overflow-y-auto bg-white custom-scrollbar">
@@ -336,14 +337,12 @@ const App = () => {
     );
   };
 
-  // ★ 1. 코스별 비디오 탭 설정표 (엑셀의 shorts/logic 칸을 그대로 쓰되, 화면에 보이는 이름만 바꿈)
   const COURSE_VIDEO_TABS = {
     'MAIN233': { shorts: 'SHORTS', logic: 'LOGIC', commentary: 'COMMENTARY' },
     'MUSTKNOW': { shorts: 'CONCEPT', logic: 'PRACTICE' }, 
     'DAILY': { shorts: 'EPISODE', logic: 'REVIEW' }     
   };
 
-// ★ 코스 숨김 스위치 (true로 해두면 화면에서 사라지고, false로 바꾸면 다시 나타납니다!)
   const HIDE_DAILY_COURSE = true;
 
   // ==========================================
@@ -357,7 +356,11 @@ const App = () => {
 
   const groupedClassData = useMemo(() => {
     const courses = { 'MAIN233': { title: 'Real Korean Patterns 233', sections: [] }, 'MUSTKNOW': { title: 'Must-Know Patterns', sections: [] }, 'DAILY': { title: 'Daily Korean', sections: [] } };
-    const mainLessons = classData.filter(l => l.course === 'MAIN233'); const mustKnowLessons = classData.filter(l => l.course === 'MUSTKNOW'); const dailyLessons = classData.filter(l => l.course === 'DAILY'); 
+    
+    // ★ 4강부터 자물쇠 채우기!
+    const mainLessons = classData.filter(l => l.course === 'MAIN233').map((l, index) => ({ ...l, isLocked: index >= 3 }));
+    const mustKnowLessons = classData.filter(l => l.course === 'MUSTKNOW').map((l, index) => ({ ...l, isLocked: index >= 3 }));
+    const dailyLessons = classData.filter(l => l.course === 'DAILY').map((l, index) => ({ ...l, isLocked: index >= 3 })); 
     
     if (mainLessons.length > 0) {
       const ranges = [ { t: "1. Solutions & Suggestions", end: 25 }, { t: "2. Intentions & Excuses", end: 50 }, { t: "3. Guessing & Gossip", end: 75 }, { t: "4. Logic & Connections", end: 99 }, { t: "5. Emotions & Attitudes", end: 122 }, { t: "6. Habits & Experience", end: 145 }, { t: "7. Emphasis & Nuance", end: 172 }, { t: "8. Comparison & Passive", end: 196 }, { t: "9. Exaggeration & Lament", end: 218 }, { t: "10. Quoting & Recall", end: 235 } ];
@@ -366,23 +369,32 @@ const App = () => {
     courses['MUSTKNOW'].sections = mustKnowLessons.length > 0 ? [ { title: "Chapter 1", lessons: mustKnowLessons.slice(0, 20) }, { title: "Chapter 2", lessons: mustKnowLessons.slice(20, 40) }, { title: "Chapter 3", lessons: mustKnowLessons.slice(40, 60) }, { title: "Chapter 4", lessons: mustKnowLessons.slice(60, 81) } ] : [{ title: "업데이트 준비 중", lessons: [] }];
     courses['DAILY'].sections = dailyLessons.length > 0 ? [ { title: "Season 1", lessons: dailyLessons.slice(0, 30) }, { title: "Season 2", lessons: dailyLessons.slice(30, 60) } ] : [{ title: "업데이트 준비 중", lessons: [] }];
 
-    // ★ 추가할 코드: 스위치가 켜져 있으면, 화면으로 보내기 전에 DAILY 데이터를 몰래 삭제!
-      if (HIDE_DAILY_COURSE) {
-        delete courses['DAILY'];
-      }
+    if (HIDE_DAILY_COURSE) {
+      delete courses['DAILY'];
+    }
       
     return courses;
   }, []);
 
+  // ★ 꼬리표 해독 및 레슨 자동 셋팅
   useEffect(() => {
     const courseObj = groupedClassData[selectedCourse];
     if (courseObj && courseObj.sections.length > 0) {
       setOpenSection(courseObj.sections[0].title);
-      if (courseObj.sections[0].lessons.length > 0) setSelectedLesson(courseObj.sections[0].lessons[0]); else setSelectedLesson(null);
+      
+      if (initialLessonId) {
+        const targetLesson = classData.find(l => String(l.lesson_id) === String(initialLessonId));
+        if (targetLesson && targetLesson.course === selectedCourse) {
+          setSelectedLesson(targetLesson);
+          return;
+        }
+      }
+      
+      if (courseObj.sections[0].lessons.length > 0) setSelectedLesson(courseObj.sections[0].lessons[0]); 
+      else setSelectedLesson(null);
     }
-  }, [selectedCourse, groupedClassData]);
+  }, [selectedCourse, groupedClassData, initialLessonId]);
 
-// ★ 2. 코스에 맞춰 탭을 자동으로 찾아주는 기능
   useEffect(() => {
     if (selectedLesson) {
       const courseTabs = COURSE_VIDEO_TABS[selectedLesson.course] || {};
@@ -395,7 +407,6 @@ const App = () => {
     setContentTab('pdf');
   }, [selectedLesson]);
 
-// ★ 1. 완벽 해결: 퀴즈 전역 함수 유지 + 토글 예외사항(1, 5강) 스마트 감지 ★
   useEffect(() => {
     if (appMode !== 'class' || contentTab !== 'pdf' || !webContentRef.current) return;
     const container = webContentRef.current;
@@ -476,7 +487,6 @@ const App = () => {
     };
   }, [selectedLesson, contentTab, appMode]);
 
-// ★ 수술 2: 리모컨 부품을 렌더링하도록 교체 ★
   const renderMedia = (url) => {
     if (!url) return <div className="aspect-video w-full flex flex-col items-center justify-center text-white/50 font-bold gap-2"><MonitorPlay size={40} className="opacity-50"/>영상/음원이 아직 준비되지 않았습니다.</div>;
     
@@ -499,7 +509,6 @@ const App = () => {
     return <video controls src={url} className="aspect-video w-full object-contain outline-none bg-black"></video>;
   };
 
-  // ★ 현재 강의 기준 이전/다음 강의 찾기 로직
   const currentCourseLessons = groupedClassData[selectedCourse]?.sections.flatMap(s => s.lessons) || [];
   const currentLessonIdx = currentCourseLessons.findIndex(l => l.lesson_id === selectedLesson?.lesson_id);
   const prevLesson = currentLessonIdx > 0 ? currentCourseLessons[currentLessonIdx - 1] : null;
@@ -536,8 +545,27 @@ const App = () => {
                     {openSection === section.title && (
                       <div className="p-2 space-y-1 bg-white border-t border-slate-100">
                         {section.lessons.length > 0 ? section.lessons.map((lesson, lIdx) => (
-                          <div key={lesson.lesson_id} onClick={() => { setSelectedLesson(lesson); setIsSidebarOpen(false); window.scrollTo(0,0); }} className={`p-3 text-xs font-bold rounded-lg cursor-pointer transition-all ${selectedLesson?.lesson_id === lesson.lesson_id ? 'bg-blue-50 text-[#3713ec]' : 'text-slate-600 hover:bg-slate-50'}`}>
-                            <span className="text-slate-400 mr-2">{lIdx + 1}.</span> {lesson.title}
+                          <div 
+                            key={lesson.lesson_id} 
+                            onClick={() => { 
+                              // ★ 자물쇠 로직 장착!
+                              if (isDemoMode && lesson.isLocked) {
+                                setShowPremiumPopup(true);
+                              } else {
+                                setSelectedLesson(lesson); 
+                                setIsSidebarOpen(false); 
+                                window.scrollTo(0,0); 
+                              }
+                            }} 
+                            className={`p-3 text-xs font-bold rounded-lg cursor-pointer transition-all flex justify-between items-center ${selectedLesson?.lesson_id === lesson.lesson_id ? 'bg-blue-50 text-[#3713ec]' : 'text-slate-600 hover:bg-slate-50'}`}
+                          >
+                            <div className="flex-1 truncate">
+                              <span className="text-slate-400 mr-2">{lIdx + 1}.</span> {lesson.title}
+                            </div>
+                            {/* ★ 데모 모드 + 잠긴 강의 = 자물쇠 표시 */}
+                            {isDemoMode && lesson.isLocked && (
+                              <span className="ml-2 text-slate-400 text-[10px] opacity-70">🔒</span>
+                            )}
                           </div>
                         )) : <div className="p-3 text-xs font-bold text-slate-400 text-center">강의 준비 중입니다.</div>}
                       </div>
@@ -574,13 +602,11 @@ const App = () => {
       {/* 2. 메인 화면 영역 */}
       <div className="flex-1 flex flex-col h-full relative overflow-x-hidden">
         
-{/* ★ 수정: 글로벌 컨트롤 (속도 조절 & 나가기 버튼) 최상단 통합 ★ */}
         <nav className="h-16 bg-white border-b border-slate-100 flex items-center justify-between px-4 md:px-6 shrink-0 z-40 relative">
           <div className="flex items-center gap-2 w-1/4 md:w-1/3">
             <button onClick={() => setIsSidebarOpen(true)} className="md:hidden p-2 text-slate-500 hover:text-slate-800"><Menu size={24}/></button>
           </div>
           
-          {/* Pill Toggle Switch */}
           <div className="flex justify-center flex-1 md:w-1/3">
             <div className="flex bg-slate-100 p-1 rounded-full relative w-48 md:w-64">
               <div className={`absolute top-1 bottom-1 w-[calc(50%-4px)] rounded-full transition-transform duration-300 ease-out shadow-sm ${appMode === 'class' ? 'translate-x-0 bg-[#3713ec]' : 'translate-x-[calc(100%+8px)] bg-purple-600'}`}></div>
@@ -589,7 +615,6 @@ const App = () => {
             </div>
           </div>
           
-          {/* 우측 글로벌 컨트롤 (속도 조절 & 나가기) */}
           <div className="flex items-center justify-end gap-1 md:gap-3 w-1/4 md:w-1/3">
             <button onClick={toggleSpeed} className={`flex items-center gap-1 px-2 md:px-3 py-1.5 rounded-full text-[10px] md:text-xs font-bold transition-colors ${appMode === 'voca' ? 'bg-purple-600/10 text-purple-600' : 'bg-[#3713ec]/10 text-[#3713ec]'}`}>
               <Gauge size={14} /> <span className="hidden sm:inline">{playbackRate}x</span><span className="sm:hidden">{playbackRate}</span>
@@ -597,7 +622,6 @@ const App = () => {
             <button onClick={handleExit} className="p-2 text-slate-400 hover:text-red-500 transition-colors hidden sm:block">
               {isDemoMode ? <Sparkles size={18}/> : <LogOut size={18}/>}
             </button>
-            {/* 모바일용 미니 나가기 버튼 */}
             <button onClick={handleExit} className="p-1.5 text-slate-400 hover:text-red-500 transition-colors sm:hidden">
               <LogOut size={16}/>
             </button>
@@ -607,21 +631,17 @@ const App = () => {
         <div className="flex-1 overflow-y-auto custom-scrollbar relative bg-white md:bg-transparent">
           {appMode === 'class' ? (
             selectedLesson ? (
-              // ★ 엣지-투-엣지 디자인: 모바일에서는 패딩 0, PC에서는 패딩 8 유지
               <div className="max-w-4xl mx-auto md:p-8 w-full animate-in fade-in zoom-in-95 duration-300 pb-10">
                 
-                {/* 헤더 영역 (모바일 여백 축소) */}
                 <header className="px-5 py-6 md:px-0 md:py-0 md:mb-6 space-y-2 bg-white md:bg-transparent">
                   <h1 className="text-2xl md:text-4xl font-black tracking-tight text-slate-900 korean-text leading-tight">{selectedLesson.title}</h1>
                   <div className="flex gap-4 text-[10px] md:text-xs font-bold text-slate-400 uppercase"><span className="flex items-center gap-1"><MonitorPlay size={14}/> {groupedClassData[selectedCourse].title}</span></div>
                 </header>
 
-{/* ★ 3. 탭 UI를 설정표(사전)에 맞춰 자동으로 그리기 */}
                 {(() => {
                   const courseTabs = COURSE_VIDEO_TABS[selectedLesson.course] || {};
                   const availableTabs = Object.keys(courseTabs).filter(k => selectedLesson.video_urls?.[k]);
                   
-                  // 영상이 하나도 없으면 아무것도 안 그림 (기존 안전장치 유지)
                   if (availableTabs.length === 0) {
                     const fallbackUrl = selectedLesson?.video_urls?.video || selectedLesson?.video_urls?.shorts;
                     if (!fallbackUrl) return null; 
@@ -634,7 +654,6 @@ const App = () => {
                     );
                   }
 
-                  // 코스에 맞는 탭 버튼들을 예쁘게 그려줌
                   return (
                     <section className="w-full">
                       <div className="flex gap-2 overflow-x-auto px-5 md:px-0 pb-3 md:pb-3 custom-scrollbar">
@@ -651,7 +670,6 @@ const App = () => {
                   );
                 })()}
                 
-                {/* ★ 교재 영역: 모바일에서는 테두리 제거 및 화면에 꽉 차게 렌더링 */}
                 <section className="bg-white md:rounded-[2rem] md:border border-slate-200 md:shadow-sm overflow-hidden flex flex-col md:mt-8 border-t border-slate-100">
                   <div className="flex border-b border-slate-100">
                     <button onClick={() => setContentTab('pdf')} className={`flex-1 py-4 text-[10px] md:text-xs font-black tracking-widest transition-all flex items-center justify-center gap-1.5 md:gap-2 ${contentTab === 'pdf' ? 'text-[#3713ec] bg-blue-50/50' : 'text-slate-400 hover:bg-slate-50'}`}><FileText size={16}/> TEXTBOOK</button>
@@ -662,7 +680,6 @@ const App = () => {
                     {contentTab === 'pdf' ? (
                       selectedLesson.course === 'MAIN233' ? (
                         selectedLesson.pdf_url ? (
-                          /* ★ 독립형 뷰어 연결 (버니넷 우회) ★ */
                           <div className="w-full h-[600px] md:h-[800px] bg-[#525659] md:rounded-b-[2rem] overflow-hidden relative">
                             {isMobile ? (
                               <iframe 
@@ -681,7 +698,6 @@ const App = () => {
                         ) : (<div className="flex flex-col items-center justify-center h-[400px] text-slate-400"><FileText size={48} className="mb-4 opacity-30"/><p className="font-bold text-sm">이 강의는 PDF 교재가 없습니다.</p></div>)
                       ) : (
                         selectedLesson.web_content ? (
-                          /* 웹교재 모바일 여백 최소화 */
                           <div className="w-full h-auto bg-white p-4 md:p-8" ref={webContentRef}>
                             <div className="w-full text-left text-slate-800 leading-relaxed overflow-x-hidden" dangerouslySetInnerHTML={{ __html: selectedLesson.web_content }} />
                           </div>
@@ -694,10 +710,10 @@ const App = () => {
                             <div key={idx} className="flex items-center gap-3 md:gap-4 p-4 md:p-6 bg-white hover:bg-blue-50/50 border border-slate-100 hover:border-blue-200 rounded-2xl transition-all shadow-sm group">
                               <button onClick={() => { const audioUrl = `${CLASS_AUDIO_BASE_URL}/${line.audio}`; playAudio(audioUrl, 'class', `${selectedLesson.lesson_id}_${idx}`); }} className="w-10 h-10 md:w-12 md:h-12 shrink-0 rounded-full bg-slate-50 border border-slate-200 text-slate-400 flex items-center justify-center group-hover:bg-[#3713ec] group-hover:text-white group-hover:border-[#3713ec] transition-all shadow-sm"><Volume2 size={18} /></button>
                               <div className="flex-1">
-  {line.type && <span className="text-[10px] font-bold text-[#3713ec] uppercase tracking-wider mb-1 block">{line.type}</span>}
-  <p className="text-base md:text-lg font-bold text-slate-800 korean-text leading-snug break-keep">{line.ko}</p>
-  <p className="text-xs md:text-sm text-slate-500 mt-1 italic">{line.en}</p>
-</div>
+                                {line.type && <span className="text-[10px] font-bold text-[#3713ec] uppercase tracking-wider mb-1 block">{line.type}</span>}
+                                <p className="text-base md:text-lg font-bold text-slate-800 korean-text leading-snug break-keep">{line.ko}</p>
+                                <p className="text-xs md:text-sm text-slate-500 mt-1 italic">{line.en}</p>
+                              </div>
                             </div>
                           ))
                         ) : (<div className="flex flex-col items-center justify-center h-[400px] text-slate-400"><Mic size={48} className="mb-4 opacity-30"/><p className="font-bold text-sm">오디오 스크립트가 아직 등록되지 않았습니다.</p></div>)}
@@ -706,7 +722,6 @@ const App = () => {
                   </div>
                 </section>
 
-                {/* ★ 모바일 강의실 전용 PREV/NEXT 네비게이션 버튼 추가 ★ */}
                 <footer className="flex justify-between items-center p-5 md:p-0 mt-2 md:mt-8 border-t border-slate-100 md:border-none bg-white md:bg-transparent">
                   {prevLesson ? (
                     <button onClick={() => { setSelectedLesson(prevLesson); window.scrollTo(0,0); }} className="flex items-center gap-1 md:gap-2 px-4 md:px-6 py-2.5 md:py-3 rounded-xl font-bold text-slate-500 hover:bg-slate-100 transition-all text-xs md:text-sm"><ChevronLeft size={16} /> <span className="hidden sm:inline">PREV LESSON</span><span className="sm:hidden">PREV</span></button>
@@ -740,15 +755,14 @@ const App = () => {
                 </div>
               ) : (
                 <div className="flex-1 flex flex-col overflow-hidden bg-[#f6f6f8] animate-in fade-in duration-300">
-<header className="bg-white border-b border-slate-200 px-4 md:px-6 py-3 md:py-4 flex justify-between items-center shrink-0">
-  <button onClick={() => setActiveWord(null)} className="flex items-center gap-2 text-slate-500 font-bold text-xs md:text-sm hover:text-purple-600 transition-all">
-    <ArrowLeft size={16} /> Back
-  </button>
-</header>
+                  <header className="bg-white border-b border-slate-200 px-4 md:px-6 py-3 md:py-4 flex justify-between items-center shrink-0">
+                    <button onClick={() => setActiveWord(null)} className="flex items-center gap-2 text-slate-500 font-bold text-xs md:text-sm hover:text-purple-600 transition-all">
+                      <ArrowLeft size={16} /> Back
+                    </button>
+                  </header>
                   <main className="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar">
                     <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6 md:gap-8 items-start">
-<div className="lg:col-span-5 space-y-4 md:space-y-6">
-                        {/* ★ 수정: 단어장 usage_note (추가 설명란) 복구 ★ */}
+                      <div className="lg:col-span-5 space-y-4 md:space-y-6">
                         <div className="bg-white rounded-2xl md:rounded-3xl p-6 md:p-8 shadow-sm border border-slate-100">
                           <h2 className="text-4xl md:text-5xl font-black text-slate-900 mb-2 korean-text">{activeWord.word}</h2>
                           <p className="text-lg md:text-xl text-slate-500 font-medium mb-4">{activeWord.meaning}</p>
@@ -789,7 +803,6 @@ const App = () => {
         </div>
       </div>
       
-{/* ★ 2. Issue 2 & 스타일/플립 증발 해결 ★ */}
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Lexend:wght@400;600;900&family=Noto+Sans+KR:wght@400;700;900&display=swap');
         @import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght@100..700&display=swap');
@@ -799,7 +812,6 @@ const App = () => {
         .custom-scrollbar::-webkit-scrollbar { width: 6px; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
         
-        /* 아이콘 텍스트 깨짐 방어 */
         .material-symbols-outlined { 
           text-transform: none !important; 
           font-family: 'Material Symbols Outlined' !important;
@@ -809,7 +821,6 @@ const App = () => {
           letter-spacing: normal !important;
         } 
 
-        /* 삭제된 컬러 강제 복구 */
         .text-bori-primary { color: #f59e0b !important; }
         .bg-bori-primary { background-color: #f59e0b !important; }
         .border-bori-primary { border-color: #f59e0b !important; }
@@ -823,14 +834,42 @@ const App = () => {
         .bg-tk-primary\\/5 { background-color: rgba(82, 106, 229, 0.05) !important; }
         .rounded-tk { border-radius: 1.5rem !important; }
         
-        /* 카드 플립 애니메이션 핵심 엔진 복구 */
         .flip-card { perspective: 1000px !important; }
         .flip-card-inner { transition: transform 0.6s !important; transform-style: preserve-3d !important; position: relative !important; width: 100% !important; height: 100% !important; }
         .flip-card-front, .flip-card-back { backface-visibility: hidden !important; -webkit-backface-visibility: hidden !important; position: absolute !important; top: 0 !important; left: 0 !important; width: 100% !important; height: 100% !important; }
         .flip-card.flipped .flip-card-inner { transform: rotateY(180deg) !important; }
         .flip-card-back { transform: rotateY(180deg) !important; }
       `}</style>
+
+      {/* 👑 프리미엄 가입 유도 팝업 */}
+      {showPremiumPopup && (
+        <div className="fixed inset-0 bg-black/60 z-[9999] flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-[2rem] p-8 max-w-sm w-full text-center shadow-2xl transform transition-all">
+            <div className="text-5xl mb-4">🔒</div>
+            <h3 className="text-2xl font-black mb-2 text-slate-800">프리미엄 전용 강의</h3>
+            <p className="text-slate-500 mb-8 text-sm leading-relaxed">
+              이 강의는 유료 회원만 볼 수 있어요.<br/>지금 가입하고 <b>모든 클래스와 단어장</b>을<br/>무제한으로 즐겨보세요!
+            </p>
+            <div className="flex flex-col gap-3">
+              <button 
+                onClick={() => window.location.href = SALES_PAGE_URL} 
+                className="w-full bg-[#3713ec] text-white font-bold py-4 rounded-xl shadow-lg hover:bg-blue-700 hover:shadow-xl transition-all"
+              >
+                지금 가입하기 🚀
+              </button>
+              <button 
+                onClick={() => setShowPremiumPopup(false)} 
+                className="w-full text-slate-400 font-medium py-2 text-sm hover:text-slate-600 transition-colors"
+              >
+                다음에 할게요
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };
+
 export default App;
