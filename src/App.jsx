@@ -125,7 +125,7 @@ const YouTubePlayer = ({ videoId }) => {
 
 const App = () => {
   const [appMode, setAppMode] = useState('class'); 
-  
+  const isDemoMode = new URLSearchParams(window.location.search).get('demo') === 'true';
 
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
   useEffect(() => {
@@ -346,29 +346,18 @@ const App = () => {
 // ★ 코스 숨김 스위치 (true로 해두면 화면에서 사라지고, false로 바꾸면 다시 나타납니다!)
   const HIDE_DAILY_COURSE = true;
 
-// ==========================================
-  // [강의실 상태 및 로직] - URL 꼬리표 해독기 & 팝업 스위치
   // ==========================================
-  const urlParams = new URLSearchParams(window.location.search);
-  const initialTab = urlParams.get('tab') === 'voca' ? 'voca' : 'pdf';
-  const initialDemoMode = urlParams.get('mode') === 'demo';
-  const initialLessonId = urlParams.get('lesson');
-
+  // [강의실 상태 및 로직] 
+  // ==========================================
   const [selectedCourse, setSelectedCourse] = useState('MAIN233');
-  const [openSection, setOpenSection] = useState(null);
+  const [openSection, setOpenSection] = useState(null); 
   const [selectedLesson, setSelectedLesson] = useState(null);
   const [videoTab, setVideoTab] = useState('logic');
-  const [contentTab, setContentTab] = useState(initialTab);
-  
-  const [isDemoMode, setIsDemoMode] = useState(initialDemoMode); // 데모 모드 스위치
-  const [showPremiumPopup, setShowPremiumPopup] = useState(false); // 자물쇠 팝업 스위치
+  const [contentTab, setContentTab] = useState('pdf');
 
   const groupedClassData = useMemo(() => {
     const courses = { 'MAIN233': { title: 'Real Korean Patterns 233', sections: [] }, 'MUSTKNOW': { title: 'Must-Know Patterns', sections: [] }, 'DAILY': { title: 'Daily Korean', sections: [] } };
-    // 1~3강은 열어두고, 4강(index 3)부터는 자물쇠(isLocked: true)를 채웁니다!
-      const mainLessons = classData.filter(l => l.course === 'MAIN233').map((l, index) => ({ ...l, isLocked: index >= 3 }));
-      const mustKnowLessons = classData.filter(l => l.course === 'MUSTKNOW').map((l, index) => ({ ...l, isLocked: index >= 3 }));
-      const dailyLessons = classData.filter(l => l.course === 'DAILY').map((l, index) => ({ ...l, isLocked: index >= 3 }));
+    const mainLessons = classData.filter(l => l.course === 'MAIN233'); const mustKnowLessons = classData.filter(l => l.course === 'MUSTKNOW'); const dailyLessons = classData.filter(l => l.course === 'DAILY'); 
     
     if (mainLessons.length > 0) {
       const ranges = [ { t: "1. Solutions & Suggestions", end: 25 }, { t: "2. Intentions & Excuses", end: 50 }, { t: "3. Guessing & Gossip", end: 75 }, { t: "4. Logic & Connections", end: 99 }, { t: "5. Emotions & Attitudes", end: 122 }, { t: "6. Habits & Experience", end: 145 }, { t: "7. Emphasis & Nuance", end: 172 }, { t: "8. Comparison & Passive", end: 196 }, { t: "9. Exaggeration & Lament", end: 218 }, { t: "10. Quoting & Recall", end: 235 } ];
@@ -385,29 +374,13 @@ const App = () => {
     return courses;
   }, []);
 
-  // 코스 변경 시 & 데모 꼬리표 확인 후 강의 자동 세팅
   useEffect(() => {
     const courseObj = groupedClassData[selectedCourse];
     if (courseObj && courseObj.sections.length > 0) {
       setOpenSection(courseObj.sections[0].title);
-      
-      // 꼬리표에 레슨 번호가 있으면 1순위로 엽니다.
-      if (initialLessonId) {
-        const targetLesson = classData.find(l => String(l.lesson_id) === String(initialLessonId));
-        if (targetLesson && targetLesson.course === selectedCourse) {
-          setSelectedLesson(targetLesson);
-          return;
-        }
-      }
-      
-      // 없으면 첫 번째 강의 열기
-      if (courseObj.sections[0].lessons.length > 0) {
-        setSelectedLesson(courseObj.sections[0].lessons[0]);
-      } else {
-        setSelectedLesson(null);
-      }
+      if (courseObj.sections[0].lessons.length > 0) setSelectedLesson(courseObj.sections[0].lessons[0]); else setSelectedLesson(null);
     }
-  }, [selectedCourse, groupedClassData, classData, initialLessonId]);
+  }, [selectedCourse, groupedClassData]);
 
 // ★ 2. 코스에 맞춰 탭을 자동으로 찾아주는 기능
   useEffect(() => {
@@ -563,29 +536,10 @@ const App = () => {
                     {openSection === section.title && (
                       <div className="p-2 space-y-1 bg-white border-t border-slate-100">
                         {section.lessons.length > 0 ? section.lessons.map((lesson, lIdx) => (
-  <div 
-    key={lesson.lesson_id} 
-    onClick={() => { 
-      // 잠긴 강의 누르면 팝업 띄우기!
-      if (isDemoMode && lesson.isLocked) {
-        setShowPremiumPopup(true);
-      } else {
-        setSelectedLesson(lesson); 
-        setIsSidebarOpen(false); 
-        window.scrollTo(0,0); 
-      }
-    }} 
-    className={`p-3 text-xs font-bold rounded-lg cursor-pointer transition-all flex justify-between items-center ${selectedLesson?.lesson_id === lesson.lesson_id ? 'bg-blue-50 text-[#3713ec]' : 'text-slate-600 hover:bg-slate-50'}`}
-  >
-    <div className="flex-1 truncate">
-      <span className="text-slate-400 mr-2">{lIdx + 1}.</span> {lesson.title}
-    </div>
-    {/* 데모 모드 + 잠긴 강의 = 자물쇠 아이콘 */}
-    {isDemoMode && lesson.isLocked && (
-      <span className="ml-2 text-slate-400 text-[10px] opacity-70">🔒</span>
-    )}
-  </div>
-)) : <div className="p-3 text-xs font-bold text-slate-400 text-center">강의 준비 중입니다.</div>}
+                          <div key={lesson.lesson_id} onClick={() => { setSelectedLesson(lesson); setIsSidebarOpen(false); window.scrollTo(0,0); }} className={`p-3 text-xs font-bold rounded-lg cursor-pointer transition-all ${selectedLesson?.lesson_id === lesson.lesson_id ? 'bg-blue-50 text-[#3713ec]' : 'text-slate-600 hover:bg-slate-50'}`}>
+                            <span className="text-slate-400 mr-2">{lIdx + 1}.</span> {lesson.title}
+                          </div>
+                        )) : <div className="p-3 text-xs font-bold text-slate-400 text-center">강의 준비 중입니다.</div>}
                       </div>
                     )}
                   </div>
@@ -876,34 +830,6 @@ const App = () => {
         .flip-card.flipped .flip-card-inner { transform: rotateY(180deg) !important; }
         .flip-card-back { transform: rotateY(180deg) !important; }
       `}</style>
-
-      {/* 👑 프리미엄 가입 유도 팝업 */}
-      {showPremiumPopup && (
-        <div className="fixed inset-0 bg-black/60 z-[9999] flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className="bg-white rounded-[2rem] p-8 max-w-sm w-full text-center shadow-2xl transform transition-all">
-            <div className="text-5xl mb-4">🔒</div>
-            <h3 className="text-2xl font-black mb-2 text-slate-800">프리미엄 전용 강의</h3>
-            <p className="text-slate-500 mb-8 text-sm leading-relaxed">
-              이 강의는 유료 회원만 볼 수 있어요.<br/>지금 가입하고 <b>모든 클래스와 단어장</b>을<br/>무제한으로 즐겨보세요!
-            </p>
-            <div className="flex flex-col gap-3">
-              <button 
-                onClick={() => window.location.href = '/price'} 
-                className="w-full bg-[#3713ec] text-white font-bold py-4 rounded-xl shadow-lg hover:bg-blue-700 hover:shadow-xl transition-all"
-              >
-                지금 가입하기 🚀
-              </button>
-              <button 
-                onClick={() => setShowPremiumPopup(false)} 
-                className="w-full text-slate-400 font-medium py-2 text-sm hover:text-slate-600 transition-colors"
-              >
-                다음에 할게요
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-      
     </div>
   );
 };
