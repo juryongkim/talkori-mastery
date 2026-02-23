@@ -11,7 +11,7 @@ import classData from './class_data.json';
 import vocaData from './voca_data.json';
 
 const ALLOWED_ORIGIN = "https://talkori.com";
-const SALES_PAGE_URL = "https://talkori.com";
+const SALES_PAGE_URL = "https://talkori.com/price";
 const BUNNY_CDN_HOST = "https://talkori.b-cdn.net";
 const CDN_BASE_URL = `${BUNNY_CDN_HOST}/audio_tk`;
 const CLASS_AUDIO_BASE_URL = `${BUNNY_CDN_HOST}/audio_class`;
@@ -168,7 +168,10 @@ const App = () => {
       if (!groups[dayKey]) groups[dayKey] = { chapterId: dayKey, title: `Day ${dayKey}: ${item.situation || "Learning"}`, words: [] };
       groups[dayKey].words.push({ id: String(item.id), word: item.word, meaning: item.meaning, usage_note: item.usage_note, examples: item.examples || [] });
     });
-    return isDemoMode ? Object.values(groups).slice(0, 3) : Object.values(groups);
+    return Object.values(groups).map((group, index) => ({
+  ...group,
+  isLocked: index >= 3
+}));
   }, [isDemoMode]);
 
   const [activeChapter, setActiveChapter] = useState(null);
@@ -585,13 +588,30 @@ const App = () => {
                 const percentage = getChapterProgress(chapter);
                 const isActive = !showGuideMain && activeChapter?.chapterId === chapter.chapterId;
                 return (
-                  <div key={idx} onClick={() => { setActiveChapter(chapter); setActiveWord(null); setShowGuideMain(false); setIsSidebarOpen(false); }} className={`flex items-start gap-4 p-3 rounded-xl cursor-pointer transition-all mb-2 ${isActive ? 'bg-[#3713ec]/5 border border-[#3713ec]/10' : 'hover:bg-slate-50'}`}>
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 font-bold text-xs ${isActive ? 'bg-[#3713ec] text-white' : 'bg-slate-100 text-slate-400'}`}>{chapter.chapterId}</div>
-                    <div className="flex-1 overflow-hidden">
-                      <h3 className={`font-bold text-sm truncate ${isActive ? 'text-[#3713ec]' : 'text-slate-600'}`}>{chapter.title}</h3>
-                      <div className="mt-2 w-full h-1.5 bg-slate-100 rounded-full overflow-hidden flex items-center"><div className="h-full bg-[#3713ec] transition-all duration-500" style={{ width: `${percentage}%` }}></div></div>
-                    </div>
-                  </div>
+                  // ▼ 자물쇠와 팝업 스위치가 달린 새 코드로 교체합니다!
+<div 
+  key={idx} 
+  onClick={() => { 
+    // ★ 데모 모드인데 잠긴 챕터를 누르면 팝업 띄우기!
+    if (isDemoMode && chapter.isLocked) {
+      setShowPremiumPopup(true);
+    } else {
+      // 아니면 정상적으로 단어장 열기
+      setActiveChapter(chapter); setActiveWord(null); setShowGuideMain(false); setIsSidebarOpen(false); 
+    }
+  }} 
+  className={`flex items-center gap-4 p-3 rounded-xl cursor-pointer transition-all mb-2 ${isActive ? 'bg-[#3713ec]/5 border border-[#3713ec]/10' : 'hover:bg-slate-50'}`}
+>
+  <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 font-bold text-xs ${isActive ? 'bg-[#3713ec] text-white' : 'bg-slate-100 text-slate-400'}`}>{chapter.chapterId}</div>
+  <div className="flex-1 overflow-hidden">
+    <h3 className={`font-bold text-sm truncate ${isActive ? 'text-[#3713ec]' : 'text-slate-600'}`}>{chapter.title}</h3>
+    <div className="mt-2 w-full h-1.5 bg-slate-100 rounded-full overflow-hidden flex items-center"><div className="h-full bg-[#3713ec] transition-all duration-500" style={{ width: `${percentage}%` }}></div></div>
+  </div>
+  {/* ★ 데모 모드 + 잠긴 챕터 = 자물쇠 아이콘 표시 */}
+  {isDemoMode && chapter.isLocked && (
+    <span className="ml-2 text-slate-400 text-xs opacity-70">🔒</span>
+  )}
+</div>
                 );
               })}
             </div>
@@ -867,7 +887,7 @@ const App = () => {
           </div>
         </div>
       )}
-
+햣
     </div>
   );
 };
