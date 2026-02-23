@@ -175,6 +175,19 @@ const App = () => {
   const [isDemoMode, setIsDemoMode] = useState(initialDemoMode);
   const [showPremiumPopup, setShowPremiumPopup] = useState(false);
 
+  // 🛡️ 보안 장치: 다이렉트 접속 차단 (공식 웹사이트를 통해서만 접속 가능)
+  const [isAuthorized, setIsAuthorized] = useState(true);
+
+  useEffect(() => {
+    const referrer = document.referrer;
+    const isLocal = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+    
+    // 로컬 테스트 환경이 아니고, 공식 홈페이지(talkori.com)에서 부른 게 아니면 차단!
+    if (!isLocal && (!referrer || !referrer.startsWith(ALLOWED_ORIGIN))) {
+      setIsAuthorized(false);
+    }
+  }, []);
+
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
   useEffect(() => {
     const handleResize = () => setWindowWidth(window.innerWidth);
@@ -552,6 +565,30 @@ const renderMedia = (url) => {
   const currentLessonIdx = currentCourseLessons.findIndex(l => l.lesson_id === selectedLesson?.lesson_id);
   const prevLesson = currentLessonIdx > 0 ? currentCourseLessons[currentLessonIdx - 1] : null;
   const nextLesson = currentLessonIdx !== -1 && currentLessonIdx < currentCourseLessons.length - 1 ? currentCourseLessons[currentLessonIdx + 1] : null;
+
+  // 🛡️ 접근 거부 화면 (영문 번역 완료)
+  if (!isAuthorized) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-slate-50 p-10 text-center z-[9999] relative">
+        <div className="bg-white p-10 md:p-16 rounded-[2rem] shadow-2xl border border-slate-100 max-w-lg w-full animate-in fade-in zoom-in duration-500">
+          <div className="w-20 h-20 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto mb-6">
+            <Lock size={40} />
+          </div>
+          <h1 className="text-3xl md:text-4xl font-black text-slate-900 mb-4 tracking-tight">Access Denied</h1>
+          <p className="text-slate-500 mb-8 font-medium text-sm md:text-base leading-relaxed">
+            Talkori is exclusively available through our official website.<br/>
+            Please access this application via Talkori.com.
+          </p>
+          <button 
+            onClick={() => window.location.href = ALLOWED_ORIGIN} 
+            className="w-full py-4 bg-[#3713ec] text-white rounded-xl font-bold shadow-lg shadow-[#3713ec]/20 hover:scale-105 transition-all"
+          >
+            Go to Official Website 🚀
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen bg-white md:bg-[#f6f6f8] font-sans text-slate-800 overflow-hidden relative">
